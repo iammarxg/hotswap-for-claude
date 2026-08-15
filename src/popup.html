@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>HotSwap for Claude</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <span class="header-dot" aria-hidden="true"></span>
+      <span class="header-title">HotSwap</span>
+      <button
+        id="refresh-all-btn"
+        class="icon-btn header-refresh-all"
+        type="button"
+        title="Refresh usage for all accounts"
+        aria-label="Refresh usage for all accounts"
+      >↻</button>
+      <span id="version-tag" class="header-version"></span>
+    </header>
+
+    <div id="status" class="status hidden"></div>
+
+    <div class="tab-bar" role="tablist">
+      <button
+        id="tab-btn-accounts"
+        class="tab-btn active"
+        type="button"
+        data-tab="accounts"
+        role="tab"
+        aria-selected="true"
+      >
+        Accounts
+      </button>
+      <button
+        id="tab-btn-tools"
+        class="tab-btn"
+        type="button"
+        data-tab="tools"
+        role="tab"
+        aria-selected="false"
+      >
+        Tools
+      </button>
+      <button
+        id="tab-btn-settings"
+        class="tab-btn"
+        type="button"
+        data-tab="settings"
+        role="tab"
+        aria-selected="false"
+      >
+        Settings
+      </button>
+    </div>
+
+    <div id="tab-panel-accounts" class="tab-panel" data-tab="accounts" role="tabpanel">
+      <section id="current-account-section" class="panel panel-tight-bottom hidden">
+        <h2 class="eyebrow">Current account</h2>
+        <ul class="profile-list profile-list-current">
+          <li id="current-account-item" class="profile-item profile-item-current"></li>
+        </ul>
+      </section>
+
+      <section class="panel panel-tight">
+        <div class="search-row">
+          <input
+            id="account-search"
+            type="text"
+            class="search-input"
+            placeholder="Search accounts…"
+          />
+          <button
+            id="add-account-toggle"
+            class="add-account-toggle"
+            type="button"
+            title="Add account"
+            aria-label="Add account"
+          >
+            <span class="add-account-plus" aria-hidden="true">+</span>
+            <svg class="add-account-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/>
+              <path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <div id="add-account-panel" class="add-account-panel hidden">
+          <input
+            id="new-label"
+            type="text"
+            placeholder="Account name — Work, Personal…"
+            maxlength="40"
+          />
+          <div class="btn-row">
+            <button id="add-btn" class="btn btn-primary">Add current account</button>
+            <button id="new-account-btn" class="btn btn-ghost">
+              Start new account
+            </button>
+          </div>
+        </div>
+
+        <div id="warning-box" class="warning-box hidden">
+          <strong>Don't</strong> use claude.ai's own "Log out" button to switch
+          accounts — that revokes the session for good. Use
+          <strong>Start new account</strong> above instead.
+        </div>
+      </section>
+
+      <section class="panel">
+        <p id="saved-eyebrow" class="eyebrow hidden">Saved accounts</p>
+        <ul id="profile-list" class="profile-list"></ul>
+
+        <p id="empty-state" class="empty-state hidden">
+          No accounts saved yet — log in to claude.ai, then add it below.
+        </p>
+        <p id="no-matches" class="empty-state hidden">
+          No accounts match "<span id="no-matches-query"></span>".
+        </p>
+      </section>
+    </div>
+
+    <div id="tab-panel-tools" class="tab-panel hidden" data-tab="tools" role="tabpanel">
+      <section class="panel panel-last">
+        <h2 class="eyebrow">Resume elsewhere</h2>
+        <div class="panel-body">
+          <p class="hint">
+            Exports this conversation to Markdown — reads the page only, no
+            API calls, no tokens spent.
+          </p>
+          <div class="btn-row">
+            <button id="export-btn" class="btn btn-primary">Export this chat</button>
+            <button id="copy-prompt-btn" class="btn btn-ghost hidden">
+              Copy resume prompt
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="tab-panel-settings" class="tab-panel hidden" data-tab="settings" role="tabpanel">
+      <section class="panel">
+        <h2 class="eyebrow">Session keep-alive</h2>
+        <div class="panel-body">
+          <p class="hint">
+            Periodically refreshes saved sessions in the background so
+            cookies don't expire. Each refresh briefly swaps cookies
+            (invisible, no tab reload) and re-snapshots them.
+          </p>
+          <div class="auto-refresh-row">
+            <label class="toggle-label" for="auto-refresh-toggle">
+              <input id="auto-refresh-toggle" type="checkbox" checked />
+              <span>Auto-refresh every</span>
+            </label>
+            <select id="auto-refresh-interval" class="interval-select">
+              <option value="4">4h</option>
+              <option value="8">8h</option>
+              <option value="12" selected>12h</option>
+              <option value="24">24h</option>
+              <option value="48">48h</option>
+            </select>
+          </div>
+          <p id="last-refresh-info" class="last-refresh-info"></p>
+          <button id="refresh-sessions-btn" class="btn btn-ghost" type="button">
+            Refresh all sessions now
+          </button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="eyebrow">Keyboard shortcuts</h2>
+        <div class="panel-body">
+          <ul id="shortcuts-list" class="shortcuts-list"></ul>
+          <button id="edit-shortcuts-btn" class="btn btn-ghost" type="button">
+            Edit shortcuts…
+          </button>
+        </div>
+      </section>
+
+      <section class="panel panel-last">
+        <h2 class="eyebrow">Backup</h2>
+        <div class="panel-body">
+          <p class="hint">
+            Updating shouldn't wipe saved accounts, but keep a backup in case —
+            it holds raw session data, so keep it private.
+          </p>
+          <div class="btn-row">
+            <button id="backup-btn" class="btn btn-primary">Download backup</button>
+            <button id="restore-btn" class="btn btn-ghost">Restore from backup</button>
+            <input id="restore-file-input" type="file" accept="application/json" class="hidden" />
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

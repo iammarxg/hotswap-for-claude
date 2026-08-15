@@ -1,0 +1,848 @@
+/* ---------------------------------------------------------------------
+   Design concept: this extension swaps between session "badges" — so the
+   UI borrows from a badge/access-panel: square ID chips, a status light,
+   monospace labels for structure (eyebrows, version tag), a bright
+   electric-indigo accent standing in for a badge stripe.
+   --------------------------------------------------------------------- */
+
+:root {
+  --ink: #101116;
+  --surface: #191b21;
+  --surface-raised: #21242c;
+  --border: #2c2f38;
+  --text: #f5f6f8;
+  --text-dim: #9096a3;
+  --accent: #5b6cff;
+  --accent-dim: #4353e6;
+  --accent-ink: #f7f8ff; /* text-on-accent */
+  --success: #7cb489;
+  --success-bg: #22301f;
+  --danger: #d97a63;
+  --danger-bg: #331c17;
+  --warn-bg: #2e2716;
+  --warn-border: #4a3a1a;
+  --warn-text: #d9b876;
+
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono",
+    Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  width: 390px;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  width: 390px;
+  max-width: 390px;
+  overflow: hidden;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--ink);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  max-width: 390px;
+}
+
+/* ---------- Header ---------- */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.header-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-dot {
+    animation: none;
+  }
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.header-title {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+.header-version {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.header-refresh-all {
+  margin-left: auto;
+  font-size: 13px;
+}
+
+.header-refresh-all.spinning {
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Status banner ---------- */
+
+.status {
+  padding: 8px 14px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.status.error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.status.success {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- Tabs ---------- */
+
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 14px;
+  gap: 4px;
+}
+
+.tab-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 9px 4px;
+  margin-bottom: -1px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-btn + .tab-btn {
+  margin-left: 10px;
+}
+
+.tab-btn:hover {
+  color: var(--text);
+}
+
+.tab-btn.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tab-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tab-panel.hidden {
+  display: none;
+}
+
+/* ---------- Panels (shared section chrome) ---------- */
+
+.panel {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-last {
+  border-bottom: none;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+/* ---------- Search ---------- */
+
+.panel-tight {
+  padding: 10px 14px 12px;
+  border-bottom: none;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.search-input {
+  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--sans);
+}
+
+.add-account-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  flex-shrink: 0;
+  height: 27px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.add-account-toggle:hover {
+  background: var(--surface-raised);
+  border-color: var(--accent-dim);
+}
+
+.add-account-plus {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.add-account-icon {
+  color: currentColor;
+}
+
+.search-input::placeholder {
+  color: var(--text-dim);
+}
+
+.search-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------- Account badge list ---------- */
+
+.profile-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.profile-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px;
+  border-left: 2px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+
+.profile-item:hover {
+  background: var(--surface);
+}
+
+.profile-item.active {
+  background: var(--surface);
+  border-left-color: var(--accent);
+}
+
+.profile-main {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Square ID-badge chip, monospace initials — the signature element */
+.avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.profile-item.active .avatar {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.profile-label-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.profile-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+
+.active-tag {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.profile-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* ---------- Current-account card ---------- */
+
+.panel-tight-bottom {
+  padding-bottom: 12px;
+}
+
+.profile-list-current {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.profile-item-current {
+  align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--accent-dim);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 10px 10px;
+  cursor: default;
+  margin-bottom: 0;
+}
+
+.profile-item-current .avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.profile-item-current .profile-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.profile-item-current:hover {
+  background: var(--surface);
+}
+
+.icon-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 5px;
+  color: var(--text-dim);
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.icon-btn:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+#saved-eyebrow {
+  margin-top: 2px;
+}
+
+/* ---------- Add-account panel (main page) ---------- */
+
+.add-account-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.empty-state {
+  margin: 0;
+  padding: 10px 2px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+/* "Most usage left" indicator — quick-switch-1's target. Also see
+   .profile-item-best for the matching row tint. */
+.best-badge {
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Soft green tint so the best account to switch to stands out at a
+   glance, without needing to read/decode a symbol. */
+.profile-item-best {
+  background: var(--success-bg);
+  border-left: 2px solid var(--success);
+}
+
+.profile-item-best:hover {
+  background: var(--success-bg);
+  filter: brightness(1.15);
+}
+
+/* Session-health status light — same visual language as the header dot */
+.health-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.health-dot.health-valid {
+  background: var(--success);
+}
+
+.health-dot.health-expiring-soon {
+  background: var(--warn-text);
+}
+
+.health-dot.health-expired {
+  background: var(--danger);
+}
+
+.health-dot.health-unknown {
+  background: var(--text-dim);
+}
+
+.profile-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.profile-usage-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.profile-usage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.usage-bar-track {
+  display: block;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  overflow: hidden;
+}
+
+.usage-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.usage-bar-fill.usage-cool {
+  background: var(--success);
+}
+
+.usage-bar-fill.usage-warm {
+  background: var(--warn-text);
+}
+
+.usage-bar-fill.usage-hot {
+  background: var(--danger);
+}
+
+.usage-pill {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  line-height: 1.5;
+}
+
+.usage-pill.usage-cool {
+  color: var(--text-dim);
+  background: var(--surface-raised);
+}
+
+.usage-pill.usage-warm {
+  color: var(--warn-text);
+  background: var(--warn-bg);
+}
+
+.usage-pill.usage-hot {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.usage-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--text-dim);
+  min-width: 0;
+}
+
+/* ---------- Full usage detail (current account only) ---------- */
+
+.usage-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.usage-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.usage-detail-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10.5px;
+}
+
+.usage-detail-label {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.usage-detail-pct {
+  font-family: var(--mono);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.usage-detail-pct.usage-cool {
+  color: var(--text-dim);
+}
+
+.usage-detail-pct.usage-warm {
+  color: var(--warn-text);
+}
+
+.usage-detail-pct.usage-hot {
+  color: var(--danger);
+}
+
+.usage-detail .usage-bar-track {
+  height: 5px;
+}
+
+.usage-detail-tier {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* ---------- Compact always-visible usage (saved accounts) ---------- */
+
+.profile-usage-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.usage-compact-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.usage-chip {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.usage-chip.usage-cool {
+  color: var(--text-dim);
+  background: var(--surface-raised);
+}
+
+.usage-chip.usage-warm {
+  color: var(--warn-text);
+  background: var(--warn-bg);
+}
+
+.usage-chip.usage-hot {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.shortcuts-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.shortcuts-list .shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.shortcuts-list kbd {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 3px;
+  background: var(--surface);
+}
+
+/* ---------- Warning box ---------- */
+
+.warning-box {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--warn-text);
+}
+
+.warning-box strong {
+  color: var(--text);
+}
+
+/* ---------- Inputs & buttons ---------- */
+
+#new-label {
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--sans);
+}
+
+#new-label::placeholder {
+  color: var(--text-dim);
+}
+
+#new-label:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.btn {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 7px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: var(--sans);
+  cursor: pointer;
+  flex: 1 1 auto;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn-primary:hover {
+  background: var(--accent-dim);
+}
+
+.btn-primary:disabled {
+  background: var(--surface-raised);
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.btn-ghost:hover {
+  background: var(--surface);
+  border-color: var(--text-dim);
+}
+
+.btn-ghost:disabled {
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+
+/* ---------- Auto-refresh keep-alive ---------- */
+
+.auto-refresh-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.toggle-label input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.interval-select {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+  font-family: var(--sans);
+  cursor: pointer;
+}
+
+.interval-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.last-refresh-info {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+}
