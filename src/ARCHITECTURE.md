@@ -214,3 +214,69 @@ sequenceDiagram
 3. **Resilient Selectors**: When scraping Claude.ai, structural and accessibility attributes (`aria-posinset`, `[role="article"]`, screen-reader headings) are prioritized over dynamic or minified Tailwind class names.
 4. **Sequential Cookie Swapping**: When refreshing usage or sessions for multiple accounts (`REFRESH_ALL_USAGE`, `REFRESH_ALL_SESSIONS`), requests run sequentially to prevent race conditions in the shared browser cookie jar.
 5. **Graceful Auto-Refresh Degradation**: The `chrome.alarms`-based keep-alive fires periodically and attempts every saved profile. If one profile's session has already been revoked server-side, the refresh fails gracefully for that profile and continues with the rest — no cascading failures.
+
+---
+
+## 6. Chrome Web Store Asset & Marketing Specifications
+
+All promotional and store assets are archived under `store-assets/v<version>/`:
+
+| Asset Type | Canvas Dimensions | Format | Strict Requirements |
+|---|---|---|---|
+| **Master Icon** | `512 × 512 px` | PNG | Dark ink `#101116` canvas, 3 overlapping ID badge chips, 1 electric indigo active chip `#5b6cff` with status dot `#7080ff`. |
+| **Store Icon** | `128 × 128 px` | PNG | Crisp downsampling with padding for Chrome Web Store icon box. |
+| **Toolbar Icons** | `16px`, `48px` | PNG | Scaled runtime icons for extension toolbar and puzzle menu. |
+| **Small Promo Tile** | `440 × 280 px` | 24-bit PNG | **No alpha channel allowed by Chrome Store**. Includes badge icon, product branding, and subtitle. |
+| **Marquee Promo Banner**| `1400 × 560 px` | 24-bit PNG | **No alpha channel allowed by Chrome Store**. Features hero headline, feature pill badges, and popup UI preview. |
+| **Screenshots** | `1280 × 800 px` | PNG | High-resolution mockups showcasing Accounts, Tools, Settings, and Combo overview. |
+| **Release Snapshot** | `.zip` archive | ZIP | `hotswap-for-claude-v<version>.zip` containing clean runtime files from `dist/`. |
+
+---
+
+## 7. Git Monorepo & Subtree Publishing Protocol
+
+This repository is structured as a private master monorepo with an automated open-source export path:
+
+```
+hotswap-for-claude-extension (PRIVATE MASTER REPO on GitHub)
+│
+└── git subtree push --prefix=src public-origin main
+    │
+    ▼
+hotswap-for-claude (PUBLIC OPEN-SOURCE REPO on GitHub)
+```
+
+### Initial GitHub Setup
+```bash
+# 1. Private Master Repo
+gh repo create hotswap-for-claude-extension --private
+git remote add origin https://github.com/YOUR_USERNAME/hotswap-for-claude-extension.git
+git push -u origin main
+
+# 2. Public Open-Source Repo
+gh repo create hotswap-for-claude --public
+git remote add public-origin https://github.com/YOUR_USERNAME/hotswap-for-claude.git
+git subtree push --prefix=src public-origin main
+```
+
+### Daily Development & Synchronization
+```bash
+# Work inside src/, verify in Chrome
+git commit -am "Feature: add new quota metric"
+
+# Push to private master repo
+git push origin main
+
+# Sync open-source public repo
+git subtree push --prefix=src public-origin main
+```
+
+---
+
+## 8. Licensing & Intellectual Property Model
+
+* **Open-Source Code (`src/`)**: Released under the **[Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)](./LICENSE)**.
+  - Individuals are free to inspect, fork, modify, run locally, and submit contributions.
+  - Commercial exploitation, monetized re-distribution, or commercial packaging is strictly prohibited without an explicit commercial license agreement.
+* **Store Listing Assets & Branding (`store-assets/` and `dist/`)**: All Rights Reserved by the author.
+
