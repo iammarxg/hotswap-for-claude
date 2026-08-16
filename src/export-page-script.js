@@ -186,8 +186,38 @@ export async function exportClaudeConversationInPage() {
         clearTimeout(timer);
         resolve(result);
       };
-      const blobHandler = (e) => finish(e.detail);
-      const anchorHandler = (e) => finish(e.detail);
+
+      const blobHandler = (e) => {
+        if (e.detail?.dataUrl) finish(e.detail);
+      };
+
+      const anchorHandler = async (e) => {
+        if (e.detail?.dataUrl) {
+          finish(e.detail);
+        } else if (e.detail?.objectUrl && e.detail.objectUrl.startsWith("blob:")) {
+          try {
+            const res = await fetch(e.detail.objectUrl);
+            const blob = await res.blob();
+            const dataUrl = await new Promise((resData) => {
+              const reader = new FileReader();
+              reader.onload = () => resData(reader.result);
+              reader.onerror = () => resData(null);
+              reader.readAsDataURL(blob);
+            });
+            if (dataUrl) {
+              finish({
+                ...e.detail,
+                dataUrl,
+                mimeType: blob.type || e.detail.mimeType,
+                size: blob.size || e.detail.size,
+              });
+            }
+          } catch (err) {
+            // Keep waiting for blobHandler
+          }
+        }
+      };
+
       const timer = setTimeout(() => finish(null), timeoutMs);
 
       document.addEventListener("__claude_export_blob_captured", blobHandler);
@@ -211,10 +241,11 @@ export async function exportClaudeConversationInPage() {
       const capturePromise = waitForBlobCaptureEvent(6000);
       directDownloadBtn.click();
       const blobCapture = await capturePromise;
-      if (blobCapture) {
+      if (blobCapture?.dataUrl) {
         return {
           triggered: true,
           dataUrl: blobCapture.dataUrl,
+          filename: blobCapture.filename || filename,
           mimeType: blobCapture.mimeType,
         };
       }
@@ -226,46 +257,49 @@ export async function exportClaudeConversationInPage() {
         ? node
         : node.querySelector("button") || node;
 
-    if (!clickable || typeof clickable.click !== "function") {
-      return { triggered: false, dataUrl: null, mimeType: null };
-    }
+    if (clickable && typeof clickable.click === "function") {
+      clickable.click();
+      await new Promise((r) => setTimeout(r, 250));
 
-    clickable.click();
-    await new Promise((r) => setTimeout(r, 200));
+      const modalDownloadBtn = Array.from(document.querySelectorAll("button")).find((el) => {
+        const aria = (el.getAttribute("aria-label") || "").toLowerCase();
+        const txt = (el.textContent || "").trim().toLowerCase();
+        return aria.startsWith("download") || txt.startsWith("download");
+      });
 
-    const modalDownloadBtn = Array.from(document.querySelectorAll("button")).find((el) => {
-      const aria = (el.getAttribute("aria-label") || "").toLowerCase();
-      const txt = (el.textContent || "").trim().toLowerCase();
-      return aria.startsWith("download") || txt.startsWith("download");
-    });
+      let blobCapture = null;
+      let triggered = false;
+      if (modalDownloadBtn) {
+        const capturePromise = waitForBlobCaptureEvent(6000);
+        modalDownloadBtn.click();
+        triggered = true;
+        blobCapture = await capturePromise;
+      }
 
-    let blobCapture = null;
-    let triggered = false;
-    if (modalDownloadBtn) {
-      const capturePromise = waitForBlobCaptureEvent(6000);
-      modalDownloadBtn.click();
-      triggered = true;
-      blobCapture = await capturePromise;
-    }
-
-    // Dismiss preview modal
-    const backBtn = Array.from(document.querySelectorAll("button")).find(
-      (el) => (el.getAttribute("aria-label") || "").toLowerCase() === "go back"
-    );
-    if (backBtn) {
-      backBtn.click();
-    } else {
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+      // Dismiss preview modal
+      const backBtn = Array.from(document.querySelectorAll("button")).find(
+        (el) => (el.getAttribute("aria-label") || "").toLowerCase() === "go back"
       );
-    }
-    await new Promise((r) => setTimeout(r, 120));
+      if (backBtn) {
+        backBtn.click();
+      } else {
+        document.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+        );
+      }
+      await new Promise((r) => setTimeout(r, 120));
 
-    return {
-      triggered,
-      dataUrl: blobCapture?.dataUrl || null,
-      mimeType: blobCapture?.mimeType || null,
-    };
+      if (blobCapture?.dataUrl) {
+        return {
+          triggered,
+          dataUrl: blobCapture.dataUrl,
+          filename: blobCapture.filename || filename,
+          mimeType: blobCapture.mimeType,
+        };
+      }
+    }
+
+    return { triggered: false, dataUrl: null, mimeType: null };
   }
 
   // Scrapes attachments in a turn
@@ -342,12 +376,14 @@ export async function exportClaudeConversationInPage() {
       let dataUrl = null;
       let mimeType = null;
       let triggered = false;
+      let resolvedFilename = filename;
 
       try {
         const outcome = await downloadArtifactOrAttachment(node, filename);
         triggered = outcome.triggered;
         dataUrl = outcome.dataUrl;
         mimeType = outcome.mimeType;
+        if (outcome.filename) resolvedFilename = outcome.filename;
       } catch (e) {
         // Fallback
       }
@@ -358,8 +394,8 @@ export async function exportClaudeConversationInPage() {
       }
 
       add({
-        type: dataUrl ? "file" : pastedText ? "text" : triggered ? "file" : "reference",
-        filename,
+        type: dataUrl ? "file" : pastedText ? "text" : "reference",
+        filename: resolvedFilename,
         url: null,
         dataUrl,
         mimeType,
