@@ -1076,24 +1076,49 @@ async function exportActiveChat() {
   const exportFolder = `${parentFolder}/${chatSubfolder}`;
   const transcriptPath = `${exportFolder}/transcript.md`;
 
+  // 1. Assign local relative paths for all attachments
   let attachmentIndex = 0;
-  let attachmentsSaved = 0;
-  let attachmentsFailed = 0;
-  const usedDownloadIds = new Set();
-
   for (const m of injectionResult.messages) {
     for (const att of m.attachments || []) {
       if (!att.url && !att.nativeDownloadTriggered && !att.dataUrl && !att.pastedText) {
         att.localPath = null;
         continue;
       }
-
       attachmentIndex++;
       const localName = `${String(attachmentIndex).padStart(2, "0")}-${ensureExtension(
         att.filename,
         att.url,
         att.pastedText ? "text" : att.type
       )}`;
+      att.localName = localName;
+      att.localPath = `attachments/${localName}`;
+    }
+  }
+
+  // 2. Save the transcript.md FIRST so the export directory is created
+  const markdown = buildMarkdownTranscript(injectionResult);
+  const dataUrl = "data:text/markdown;charset=utf-8," + encodeURIComponent(markdown);
+  const transcriptDownloadId = await chrome.downloads.download({
+    url: dataUrl,
+    filename: transcriptPath,
+    saveAs: false,
+  });
+  const transcriptResult = await waitForDownloadSettled(transcriptDownloadId);
+  if (!transcriptResult.ok) {
+    throw new Error(
+      `The transcript file didn't finish saving (${transcriptResult.error}).`
+    );
+  }
+
+  // 3. Sequentially save all attachments inside the newly created attachments/ folder
+  let attachmentsSaved = 0;
+  let attachmentsFailed = 0;
+  const usedDownloadIds = new Set();
+
+  for (const m of injectionResult.messages) {
+    for (const att of m.attachments || []) {
+      if (!att.localName) continue;
+      const localName = att.localName;
 
       if (att.dataUrl) {
         const relativePath = `${exportFolder}/attachments/${localName}`;
@@ -1105,7 +1130,6 @@ async function exportActiveChat() {
           });
           const settled = await waitForDownloadSettled(downloadId);
           if (settled.ok) {
-            att.localPath = `attachments/${localName}`;
             attachmentsSaved++;
           } else {
             att.localPath = null;
@@ -1126,7 +1150,6 @@ async function exportActiveChat() {
           });
           const settled = await waitForDownloadSettled(downloadId);
           if (settled.ok) {
-            att.localPath = `attachments/${localName}`;
             attachmentsSaved++;
           } else {
             att.localPath = null;
@@ -1140,7 +1163,6 @@ async function exportActiveChat() {
         const relativePath = `${exportFolder}/attachments/${localName}`;
         const success = await downloadAttachmentFile(att.url, relativePath);
         if (success) {
-          att.localPath = `attachments/${localName}`;
           attachmentsSaved++;
         } else {
           att.localPath = null;
@@ -1160,20 +1182,6 @@ async function exportActiveChat() {
         else attachmentsFailed++;
       }
     }
-  }
-
-  const markdown = buildMarkdownTranscript(injectionResult);
-  const dataUrl = "data:text/markdown;charset=utf-8," + encodeURIComponent(markdown);
-  const downloadId = await chrome.downloads.download({
-    url: dataUrl,
-    filename: transcriptPath,
-    saveAs: false,
-  });
-  const transcriptResult = await waitForDownloadSettled(downloadId);
-  if (!transcriptResult.ok) {
-    throw new Error(
-      `The transcript file didn't finish saving (${transcriptResult.error}).`
-    );
   }
 
   return {

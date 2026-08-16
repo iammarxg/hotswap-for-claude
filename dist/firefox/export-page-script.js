@@ -7,7 +7,9 @@
 // with zero token/credit cost.
 
 export async function exportClaudeConversationInPage() {
-  function serializeNode(node) {
+  document.documentElement.setAttribute("data-claude-export-active", "true");
+  try {
+    function serializeNode(node) {
     if (node.nodeType === Node.TEXT_NODE) return node.textContent;
     if (node.nodeType !== Node.ELEMENT_NODE) return "";
 
@@ -500,4 +502,7 @@ export async function exportClaudeConversationInPage() {
   await captureVisible(store);
 
   return scrapeConversation(store);
+  } finally {
+    document.documentElement.removeAttribute("data-claude-export-active");
+  }
 }

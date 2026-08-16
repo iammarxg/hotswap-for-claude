@@ -800,20 +800,88 @@ loadAutoRefreshSettings();
 
 // ---------- Export directory setting ----------
 const exportParentInput = document.getElementById("export-parent-input");
+const browseFolderBtn = document.getElementById("browse-folder-btn");
+const resetFolderBtn = document.getElementById("reset-folder-btn");
+const exportPreviewPath = document.getElementById("export-preview-path");
+
+const DEFAULT_EXPORT_FOLDER = "HotSwap-Claude-Exports";
+
+function normalizeExportPath(raw) {
+  if (!raw) return DEFAULT_EXPORT_FOLDER;
+  let cleaned = raw.trim().replace(/\\+/g, "/");
+
+  // If user pasted a full absolute path, extract the part inside Downloads
+  const dlMatch = cleaned.match(/(?:^|\/|\\)Downloads\/(.+)$/i);
+  if (dlMatch && dlMatch[1]) {
+    cleaned = dlMatch[1];
+  } else {
+    // Strip drive letters, leading/trailing slashes, and ../ traversals
+    cleaned = cleaned.replace(/^[a-zA-Z]:\/?/, "").replace(/^[\/.]+/, "").replace(/[\/.]+$/, "");
+  }
+
+  cleaned = cleaned.replace(/\/{2,}/g, "/").trim();
+  return cleaned || DEFAULT_EXPORT_FOLDER;
+}
+
+function updateExportPreview(folderName) {
+  if (!exportPreviewPath) return;
+  const safe = folderName || DEFAULT_EXPORT_FOLDER;
+  exportPreviewPath.innerHTML = `Target: <code>Downloads/${safe}/</code>`;
+}
 
 async function loadExportFolderSetting() {
   if (!exportParentInput) return;
   const stored = await chrome.storage.local.get("exportParentFolder");
-  if (stored.exportParentFolder) {
-    exportParentInput.value = stored.exportParentFolder;
-  }
+  const folder = stored.exportParentFolder || DEFAULT_EXPORT_FOLDER;
+  exportParentInput.value = folder;
+  updateExportPreview(folder);
 }
 
 if (exportParentInput) {
+  exportParentInput.addEventListener("input", () => {
+    const val = normalizeExportPath(exportParentInput.value);
+    updateExportPreview(val);
+  });
+
   exportParentInput.addEventListener("change", async () => {
-    const val = exportParentInput.value.trim() || "HotSwap-Claude-Exports";
+    const val = normalizeExportPath(exportParentInput.value);
+    exportParentInput.value = val;
     await chrome.storage.local.set({ exportParentFolder: val });
-    showStatus(`Export folder set to "${val}".`, "success");
+    updateExportPreview(val);
+    showStatus(`Export folder set to "Downloads/${val}/".`, "success");
+  });
+}
+
+if (browseFolderBtn) {
+  browseFolderBtn.addEventListener("click", async () => {
+    try {
+      if (typeof window.showDirectoryPicker === "function") {
+        const dirHandle = await window.showDirectoryPicker({ mode: "read" });
+        if (dirHandle && dirHandle.name) {
+          const folderName = normalizeExportPath(dirHandle.name);
+          exportParentInput.value = folderName;
+          await chrome.storage.local.set({ exportParentFolder: folderName });
+          updateExportPreview(folderName);
+          showStatus(`Export folder set to "Downloads/${folderName}/".`, "success");
+        }
+      } else {
+        exportParentInput.focus();
+        showStatus("Type or paste your desired folder path below.", "info");
+      }
+    } catch (err) {
+      if (err.name !== "AbortError") {
+        exportParentInput.focus();
+      }
+    }
+  });
+}
+
+if (resetFolderBtn) {
+  resetFolderBtn.addEventListener("click", async () => {
+    exportParentInput.value = DEFAULT_EXPORT_FOLDER;
+    await chrome.storage.local.set({ exportParentFolder: DEFAULT_EXPORT_FOLDER });
+    updateExportPreview(DEFAULT_EXPORT_FOLDER);
+    showStatus(`Export folder reset to "Downloads/${DEFAULT_EXPORT_FOLDER}/".`, "success");
   });
 }
 
