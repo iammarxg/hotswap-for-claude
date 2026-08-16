@@ -30,6 +30,12 @@ The repository is organized into a **Development Path** (where bug fixes and fea
 
 ```
 hotswap-for-claude-extension/
+├── .github/workflows/                  # ⚙️ [CI/CD PIPELINE]
+│   └── release.yml                     # Automated release & dual packager workflow
+│
+├── scripts/                            # 🛠️ [PACKAGING UTILITIES]
+│   └── package.py                      # Dual Chrome/Firefox packager & validator
+│
 ├── src/                                # [PUBLIC / OPEN-SOURCE DEV PATH]
 │   ├── manifest.json                   # MV3 manifest
 │   ├── background.js                   # Service worker & core logic
@@ -43,19 +49,23 @@ hotswap-for-claude-extension/
 │   ├── README.md                       # Developer & user documentation
 │   └── ARCHITECTURE.md                 # System architecture guide
 │
-├── dist/                               # [PRIVATE / CHROME WEB STORE PRODUCTION BUILD]
-│   ├── manifest.json                   # Production manifest (clean, no dev notes)
-│   ├── background.js                   # Production service worker
-│   ├── blob-capture-init.js            # Production blob interceptor
-│   ├── export-page-script.js           # Production export script
-│   ├── popup.html                      # Production popup UI
-│   ├── popup.js                        # Production popup JS
-│   ├── popup.css                       # Production popup CSS
-│   └── icons/                          # Production icon assets
+├── dist/                               # [PRIVATE / PRODUCTION BUILDS]
+│   ├── chrome/                         # Clean Chrome MV3 build
+│   │   ├── manifest.json
+│   │   ├── background.js, blob-capture-init.js, export-page-script.js
+│   │   ├── popup.html, popup.js, popup.css
+│   │   └── icons/
+│   └── firefox/                        # Clean Firefox Gecko MV3 build
+│       ├── manifest.json               # Injected gecko.id & background script config
+│       ├── background.js, blob-capture-init.js, export-page-script.js
+│       ├── popup.html, popup.js, popup.css
+│       └── icons/
 │
 └── store-assets/                       # [PRIVATE / VERSIONED STORE & MARKETING ASSETS]
     └── v1.0.0/                         # Version archive folder (v1.0.0, v1.1.0, etc.)
-        ├── hotswap-for-claude-v1.0.0.zip # Full extension package snapshot zip
+        ├── hotswap-for-claude-chrome-v1.0.0.zip  # Chrome Web Store package
+        ├── hotswap-for-claude-firefox-v1.0.0.zip # Firefox Add-ons package
+        ├── hotswap-for-claude-v1.0.0.zip         # Package snapshot zip
         ├── icon512.png                 # High-resolution master icon (512x512)
         ├── icon128.png                 # Store listing icon (128x128)
         ├── icon48.png / icon16.png     # Scaled icons
@@ -67,14 +77,11 @@ hotswap-for-claude-extension/
 ### 📋 Mandatory Release & Maintenance Workflow Rules (For All Agents & Maintainers)
 
 1. **Development & Testing Sandbox**: All active feature development, bug fixes, and experiments occur inside `src/`.
-2. **Production Mirroring**: Once verified, clean runtime files (`manifest.json`, `background.js`, `blob-capture-init.js`, `export-page-script.js`, `popup.*`, `icons/`) are synced to `dist/` without development documentation, licenses, or scratch files.
-3. **Version Bump & Asset Snapshots**:
-   - For every release or published feature update, bump the version (`manifest.json` and `ARCHITECTURE.md`).
-   - Create a version folder in `store-assets/vX.Y.Z/`.
-   - **Always generate a zip snapshot** of the production extension files (`hotswap-for-claude-vX.Y.Z.zip`) inside `store-assets/vX.Y.Z/` alongside screenshots and icon assets.
+2. **Automated Dual Packaging (`scripts/package.py`)**: Run `python scripts/package.py` to automatically mirror clean runtime files to `dist/chrome/` and `dist/firefox/`, generate Firefox-compatible manifests (`gecko.id`), and output release `.zip` files to `store-assets/v<version>/`.
+3. **CI/CD GitHub Releases**: On every push to `main`, `.github/workflows/release.yml` automatically triggers, runs the packager, and publishes a new GitHub Release with Chrome and Firefox zip packages attached.
 4. **Git Subtree Publishing**:
    - Push `src/` to the public repository using `git subtree push --prefix=src public-origin main`.
-   - Production builds (`dist/`) and marketing assets (`store-assets/`) remain private on `origin main`.
+   - Production builds (`dist/`), automation scripts, and marketing assets (`store-assets/`) remain private on `origin main`.
 5. **Mandatory Documentation Updates**:
    - **Always** update `README.md` and `ARCHITECTURE.md` on every feature modification, architectural change, or workflow update—even if the prompt does not explicitly request it.
 

@@ -8,6 +8,12 @@ Private monorepo and source control for **HotSwap for Claude** (Chrome Extension
 
 ```
 hotswap-for-claude-extension/
+├── .github/workflows/            # ⚙️ [CI/CD AUTOMATION]
+│   └── release.yml               # Automated release & dual packager workflow
+│
+├── scripts/                      # 🛠️ [BUILD UTILITIES]
+│   └── package.py                # Cross-platform packaging script (Chrome + Firefox)
+│
 ├── src/                          # 🌐 [PUBLIC / OPEN-SOURCE DEV SOURCE]
 │   ├── manifest.json             # MV3 extension manifest
 │   ├── background.js             # Service worker & keepalive engine
@@ -21,21 +27,27 @@ hotswap-for-claude-extension/
 │   ├── README.md                 # Developer & user documentation
 │   └── ARCHITECTURE.md           # System architecture specification
 │
-├── dist/                         # 🔒 [PRIVATE / CHROME WEB STORE PRODUCTION BUILD]
-│   ├── manifest.json             # Clean production manifest
-│   ├── background.js             # Production service worker
-│   ├── blob-capture-init.js      # Production blob interceptor
-│   ├── export-page-script.js     # Production export script
-│   ├── popup.html / popup.js / popup.css
-│   └── icons/
+├── dist/                         # 🔒 [PRIVATE / PRODUCTION DISTRIBUTIONS]
+│   ├── chrome/                   # Clean Chrome MV3 build
+│   │   ├── manifest.json
+│   │   ├── background.js, blob-capture-init.js, export-page-script.js
+│   │   ├── popup.html, popup.js, popup.css
+│   │   └── icons/
+│   └── firefox/                  # Clean Firefox Gecko MV3 build
+│       ├── manifest.json         # Includes gecko.id & background script settings
+│       ├── background.js, blob-capture-init.js, export-page-script.js
+│       ├── popup.html, popup.js, popup.css
+│       └── icons/
 │
 └── store-assets/                 # 🔒 [PRIVATE / MARKETING & VERSIONED ASSETS]
     └── v1.0.0/                   # Version release archives
-        ├── hotswap-for-claude-v1.0.0.zip # Package snapshot for store upload
-        ├── icon512.png / icon128.png     # High-res store icons
-        ├── promo_small_440x280.png       # Small promo tile (440x280)
-        ├── promo_marquee_1400x560.png    # Marquee banner (1400x560)
-        └── screenshot_*.png              # 1280x800 showcase screenshots
+        ├── hotswap-for-claude-chrome-v1.0.0.zip  # Chrome store package
+        ├── hotswap-for-claude-firefox-v1.0.0.zip # Firefox add-on package
+        ├── hotswap-for-claude-v1.0.0.zip         # Release snapshot zip
+        ├── icon512.png / icon128.png             # High-res store icons
+        ├── promo_small_440x280.png               # Small promo tile (440x280)
+        ├── promo_marquee_1400x560.png            # Marquee banner (1400x560)
+        └── screenshot_*.png                      # 1280x800 showcase screenshots
 ```
 
 ---
@@ -82,6 +94,24 @@ git commit -am "Update feature X"
 git push origin main                              # Updates private master repo
 git subtree push --prefix=src public-origin main   # Updates public repo
 ```
+
+---
+
+## 🛠️ Automated Packaging & GitHub Releases
+
+### Local Packaging (Chrome + Firefox)
+Run the automated packaging utility at any time to sync `src/` to `dist/chrome/` and `dist/firefox/` and generate store packages:
+```bash
+python scripts/package.py
+```
+This produces:
+- `dist/chrome/` & `dist/firefox/`
+- `store-assets/v<version>/hotswap-for-claude-chrome-v<version>.zip`
+- `store-assets/v<version>/hotswap-for-claude-firefox-v<version>.zip`
+
+### Automated GitHub Releases (CI/CD)
+The `.github/workflows/release.yml` GitHub Actions pipeline is active on this repository:
+- **On every push to `main`**: Builds Chrome and Firefox packages, validates manifests, creates a GitHub Release, and attaches both `.zip` distribution packages automatically.
 
 ---
 
