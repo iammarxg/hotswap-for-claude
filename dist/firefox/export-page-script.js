@@ -101,7 +101,10 @@ export async function exportClaudeConversationInPage() {
       else if (typeText.includes("markdown") || typeText.includes("md")) ext = ".md";
       else if (typeText.includes("python") || typeText.includes("py")) ext = ".py";
       else if (typeText.includes("javascript") || typeText.includes("js")) ext = ".js";
-      else if (typeText.includes("typescript") || typeText.includes("ts")) ext = ".ts";
+      else if (typeText.includes("zip") || typeText.includes("archive")) ext = ".zip";
+      else if (typeText.includes("png")) ext = ".png";
+      else if (typeText.includes("jpg") || typeText.includes("jpeg")) ext = ".jpg";
+      else if (typeText.includes("webp")) ext = ".webp";
 
       let cleanName = sanitizeAttachmentName(title);
       if (ext && !cleanName.toLowerCase().endsWith(ext)) {
@@ -201,74 +204,72 @@ export async function exportClaudeConversationInPage() {
       return text || null;
     }
 
-    function waitForBlobCaptureEvent(timeoutMs = 8000) {
+    function readBlobToDataUrl(blob) {
       return new Promise((resolve) => {
-        let settled = false;
-        const finish = (result) => {
-          if (settled) return;
-          settled = true;
-          document.removeEventListener("__claude_export_blob_captured", blobHandler);
-          document.removeEventListener("__claude_export_anchor_clicked", anchorHandler);
-          clearTimeout(timer);
-          resolve(result);
-        };
-
-        const blobHandler = (e) => {
-          if (e.detail?.dataUrl) finish(e.detail);
-        };
-
-        const anchorHandler = async (e) => {
-          if (e.detail?.dataUrl) {
-            finish(e.detail);
-          } else if (e.detail?.objectUrl && e.detail.objectUrl.startsWith("blob:")) {
-            try {
-              const res = await fetch(e.detail.objectUrl);
-              const blob = await res.blob();
-              const dataUrl = await new Promise((resData) => {
-                const reader = new FileReader();
-                reader.onload = () => resData(reader.result);
-                reader.onerror = () => resData(null);
-                reader.readAsDataURL(blob);
-              });
-              if (dataUrl) {
-                finish({
-                  ...e.detail,
-                  dataUrl,
-                  mimeType: blob.type || e.detail.mimeType,
-                  size: blob.size || e.detail.size,
-                });
-              }
-            } catch (err) {
-              // Wait for blobHandler
-            }
-          }
-        };
-
-        const timer = setTimeout(() => finish(null), timeoutMs);
-
-        document.addEventListener("__claude_export_blob_captured", blobHandler);
-        document.addEventListener("__claude_export_anchor_clicked", anchorHandler);
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
       });
+    }
+
+    async function fetchBlobToDataUrl(blobUrl) {
+      try {
+        const res = await fetch(blobUrl);
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        return await readBlobToDataUrl(blob);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function dismissModal() {
+      const backBtn = Array.from(document.querySelectorAll("button")).find(
+        (el) =>
+          (el.getAttribute("aria-label") || "").toLowerCase() === "go back" ||
+          (el.getAttribute("aria-label") || "").toLowerCase() === "close"
+      );
+      if (backBtn && typeof backBtn.click === "function") {
+        backBtn.click();
+      } else {
+        document.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+        );
+      }
     }
 
     // Downloads an artifact or file attachment. Prefers in-card direct download button.
     async function downloadArtifactOrAttachment(node, filename) {
+      window.__claudeLastCapturedBlob = null;
+
       // 1. Direct in-place download button check (e.g. on artifact cards)
       const directDownloadBtn =
         node.querySelector('button[aria-label^="Download"], button[data-cds="Button"][aria-label*="Download"]') ||
         (node.tagName?.toLowerCase() === "button" && /download/i.test(node.getAttribute("aria-label") || "") ? node : null);
 
       if (directDownloadBtn && typeof directDownloadBtn.click === "function") {
-        const capturePromise = waitForBlobCaptureEvent(8000);
         directDownloadBtn.click();
-        const blobCapture = await capturePromise;
-        if (blobCapture?.dataUrl) {
-          return {
-            triggered: true,
-            dataUrl: blobCapture.dataUrl,
-            filename: blobCapture.filename || filename,
-            mimeType: blobCapture.mimeType,
-          };
+
+        for (let i = 0; i < 35; i++) {
+          await new Promise((r) => setTimeout(r, 100));
+          const captured = window.__claudeLastCapturedBlob;
+          if (captured) {
+            let dataUrl = captured.dataUrl;
+            if (!dataUrl && captured.blob) {
+              dataUrl = await readBlobToDataUrl(captured.blob);
+            } else if (!dataUrl && captured.objectUrl) {
+              dataUrl = await fetchBlobToDataUrl(captured.objectUrl);
+            }
+            if (dataUrl) {
+              return {
+                triggered: true,
+                dataUrl,
+                filename: captured.filename || filename,
+                mimeType: captured.mimeType,
+              };
+            }
+          }
         }
       }
 
@@ -280,7 +281,7 @@ export async function exportClaudeConversationInPage() {
 
       if (clickable && typeof clickable.click === "function") {
         clickable.click();
-        await new Promise((r) => setTimeout(r, 250));
+        await new Promise((r) => setTimeout(r, 300));
 
         const modalDownloadBtn = Array.from(document.querySelectorAll("button")).find((el) => {
           const aria = (el.getAttribute("aria-label") || "").toLowerCase();
@@ -288,36 +289,31 @@ export async function exportClaudeConversationInPage() {
           return aria.startsWith("download") || txt.startsWith("download");
         });
 
-        let blobCapture = null;
-        let triggered = false;
-        if (modalDownloadBtn) {
-          const capturePromise = waitForBlobCaptureEvent(8000);
+        if (modalDownloadBtn && typeof modalDownloadBtn.click === "function") {
           modalDownloadBtn.click();
-          triggered = true;
-          blobCapture = await capturePromise;
+          for (let i = 0; i < 35; i++) {
+            await new Promise((r) => setTimeout(r, 100));
+            const captured = window.__claudeLastCapturedBlob;
+            if (captured) {
+              let dataUrl = captured.dataUrl;
+              if (!dataUrl && captured.blob) {
+                dataUrl = await readBlobToDataUrl(captured.blob);
+              } else if (!dataUrl && captured.objectUrl) {
+                dataUrl = await fetchBlobToDataUrl(captured.objectUrl);
+              }
+              if (dataUrl) {
+                dismissModal();
+                return {
+                  triggered: true,
+                  dataUrl,
+                  filename: captured.filename || filename,
+                  mimeType: captured.mimeType,
+                };
+              }
+            }
+          }
         }
-
-        // Dismiss preview modal
-        const backBtn = Array.from(document.querySelectorAll("button")).find(
-          (el) => (el.getAttribute("aria-label") || "").toLowerCase() === "go back"
-        );
-        if (backBtn) {
-          backBtn.click();
-        } else {
-          document.dispatchEvent(
-            new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
-          );
-        }
-        await new Promise((r) => setTimeout(r, 150));
-
-        if (blobCapture?.dataUrl) {
-          return {
-            triggered,
-            dataUrl: blobCapture.dataUrl,
-            filename: blobCapture.filename || filename,
-            mimeType: blobCapture.mimeType,
-          };
-        }
+        dismissModal();
       }
 
       return { triggered: false, dataUrl: null, mimeType: null };
@@ -373,10 +369,10 @@ export async function exportClaudeConversationInPage() {
         }
       });
 
-      // 3. Artifact Cards & File Thumbnail Chips
+      // 3. Artifact Cards, User File Chips & File Thumbnail Chips
       const cardNodes = Array.from(
         turnEl.querySelectorAll(
-          '.group\\/artifact-block, [class*="artifact-block"], [data-testid*="file"], [data-testid*="attachment"], [data-testid*="artifact"], [data-testid="document-thumbnail"]'
+          '.group\\/artifact-block, [class*="artifact-block"], [data-testid*="file"], [data-testid*="attachment"], [data-testid*="artifact"], [data-testid="document-thumbnail"], [class*="attachment-item"]'
         )
       );
 

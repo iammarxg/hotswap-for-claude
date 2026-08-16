@@ -1059,6 +1059,7 @@ async function exportActiveChat() {
   const { result } = await withCapturedDownloads(() =>
     chrome.scripting.executeScript({
       target: { tabId: tab.id },
+      world: "MAIN",
       func: exportClaudeConversationInPage,
     })
   );
