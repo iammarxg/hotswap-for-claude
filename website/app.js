@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const SUPPORT_EMAIL = 'support@jeddah.dev';
-  const PRODUCT_NAME = 'HotSwap for Claude (v1.0.0)';
+  const PRODUCT_NAME = 'HotSwap for Claude (v1.1.0)';
   const EXTENSION_ID = 'nnpnmjhealgmnbinplmccegkecabcpdk';
   const SITE_URL = 'https://hotswap.jeddah.dev';
 

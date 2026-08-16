@@ -121,11 +121,21 @@ def main():
     
     version_assets_dir = os.path.join(STORE_ASSETS_DIR, f"v{version}")
     os.makedirs(version_assets_dir, exist_ok=True)
-    
+
+    # Sync marketing images (icons, promo tiles, screenshots) from root or v1.0.0
+    v1_dir = os.path.join(STORE_ASSETS_DIR, "v1.0.0")
+    if os.path.exists(v1_dir) and v1_dir != version_assets_dir:
+        for img_file in os.listdir(v1_dir):
+            if img_file.endswith((".png", ".jpg", ".jpeg", ".svg")) and not img_file.endswith(".zip"):
+                src_img = os.path.join(v1_dir, img_file)
+                dst_img = os.path.join(version_assets_dir, img_file)
+                if not os.path.exists(dst_img):
+                    shutil.copy2(src_img, dst_img)
+
     chrome_zip = build_chrome(manifest, version_assets_dir)
     firefox_zip = build_firefox(manifest, version_assets_dir)
-    
-    # Also create legacy/standard symlink or default zip name for backwards compatibility
+
+    # Also create default zip name
     default_zip = os.path.join(version_assets_dir, f"hotswap-for-claude-v{version}.zip")
     shutil.copy2(chrome_zip, default_zip)
     

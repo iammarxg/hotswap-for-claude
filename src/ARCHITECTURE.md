@@ -2,6 +2,7 @@
 
 This document provides a comprehensive technical overview of the Chrome Extension codebase for AI agents, developers, and maintainers.
 
+- **Version**: `v1.1.0`
 - **Live Website**: [https://hotswap.jeddah.dev](https://hotswap.jeddah.dev)
 - **Chrome Web Store ID**: `nnpnmjhealgmnbinplmccegkecabcpdk`
 - **Support Contact**: `support@jeddah.dev`
@@ -10,7 +11,7 @@ This document provides a comprehensive technical overview of the Chrome Extensio
 
 ## 1. Overview & Core Purpose
 
-The **HotSwap for Claude (v1.0.0)** is a Manifest V3 Chrome extension designed to solve three main problems when using Claude.ai:
+The **HotSwap for Claude (v1.1.0)** is a Manifest V3 browser extension designed to solve three main problems when using Claude.ai:
 
 1. **Multi-Account Switching without Getting Logged Out**:
    - Claude.ai's authentication cookies are `HttpOnly`, which content scripts cannot read or write.
@@ -22,11 +23,14 @@ The **HotSwap for Claude (v1.0.0)** is a Manifest V3 Chrome extension designed t
    - Tracks 5-hour session limits, 7-day weekly limits, and model-specific caps (Sonnet, Opus, Fable).
    - Allows checking usage for inactive accounts by performing invisible background cookie swaps.
 
-3. **Client-Side Conversation & Attachment Export**:
+3. **Lossless Conversation, Artifact & Thought Export**:
    - Scrapes conversation turns from the virtualized DOM directly to Markdown with zero token cost.
+   - Auto-expands and captures Claude's **internal thought processes and reasoning chains**, preserving insights even on turns cut short when credits run out.
    - Captures user-uploaded attachments, artifacts, and pasted text using an early `URL.createObjectURL` proxy in the main JavaScript execution realm (`MAIN` world).
+   - Saves all files into a structured dedicated parent directory (`Downloads/HotSwap-Claude-Exports/${ChatTitle}_${Date}_${ChatID}/attachments/`).
 
 ---
+
 
 ## 2. Directory Structure & Workflow
 

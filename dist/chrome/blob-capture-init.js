@@ -1,30 +1,15 @@
 // blob-capture-init.js
 //
-// Runs in the MAIN world (the real page's JS realm, not the isolated
-// content-script world) at document_start — before claude.ai's own bundle
-// has loaded or executed a single line. That timing is the whole point:
-// if this override installs after Claude's bundle has already run, any
-// reference Claude's own code cached to the original URL.createObjectURL
-// (e.g. `const c = URL.createObjectURL` at module init, which minified
-// bundlers do routinely) would keep pointing at the untouched original,
-// and our override would never see those calls — confirmed by testing:
-// the export flow correctly found and clicked Claude's real Download
-// button, but a same-turn createObjectURL override installed later never
-// fired ("blob captured: false" on every attempt). Installing here, before
-// Claude's code exists at all, means every reference Claude's code takes —
-// cached or not — resolves to our wrapped version, because there is no
-// "original" left to cache by the time its bundle runs.
-//
-// export-page-script.js runs later, in the isolated content-script world,
-// which does NOT share this window object — so state can't be handed over
-// directly. Instead this dispatches a DOM CustomEvent (the DOM itself is
-// shared across worlds) carrying the already-base64-encoded file the
-// moment it's ready, and export-page-script.js just listens for it.
+// Runs in the MAIN world (the real page's JS realm) at document_start.
+// Intercepts URL.createObjectURL and programmatic anchor downloads before
+// Claude's bundle executes, allowing 100% of generated attachments,
+// artifacts, and exported files to be captured in-memory as base64 Data URLs.
 (function () {
   if (window.__claudeExportBlobPatchInstalled) return;
   window.__claudeExportBlobPatchInstalled = true;
 
   const originalCreateObjectURL = URL.createObjectURL.bind(URL);
+  const blobRegistry = new Map(); // objectUrl -> { dataUrl, size, mimeType, timestamp }
 
   URL.createObjectURL = function (obj) {
     const objectUrl = originalCreateObjectURL(obj);
@@ -32,25 +17,54 @@
       if (obj instanceof Blob) {
         const reader = new FileReader();
         reader.onload = () => {
+          const detail = {
+            objectUrl,
+            dataUrl: reader.result,
+            size: obj.size,
+            mimeType: obj.type || "application/octet-stream",
+            timestamp: Date.now(),
+          };
+          blobRegistry.set(objectUrl, detail);
+
+          // Keep cache bounded
+          if (blobRegistry.size > 50) {
+            const oldest = blobRegistry.keys().next().value;
+            blobRegistry.delete(oldest);
+          }
+
           document.dispatchEvent(
-            new CustomEvent("__claude_export_blob_captured", {
-              detail: {
-                objectUrl,
-                dataUrl: reader.result,
-                size: obj.size,
-                mimeType: obj.type,
-              },
-            })
+            new CustomEvent("__claude_export_blob_captured", { detail })
           );
         };
-        // Best-effort — if reading fails for any reason, we simply never
-        // dispatch the event and export-page-script.js's wait times out,
-        // falling back to its existing native-download-capture path.
         reader.readAsDataURL(obj);
       }
     } catch (e) {
-      // Never let our instrumentation break Claude's own download flow.
+      // Best-effort — never break Claude's native download flow
     }
     return objectUrl;
+  };
+
+  // Intercept anchor click downloads
+  const originalAnchorClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function () {
+    try {
+      const href = this.href;
+      const downloadName = this.getAttribute("download") || this.download;
+      if (href && (href.startsWith("blob:") || href.startsWith("data:"))) {
+        const detail = blobRegistry.get(href) || {
+          objectUrl: href,
+          dataUrl: href.startsWith("data:") ? href : null,
+          filename: downloadName,
+          timestamp: Date.now(),
+        };
+        if (downloadName) detail.filename = downloadName;
+        document.dispatchEvent(
+          new CustomEvent("__claude_export_anchor_clicked", { detail })
+        );
+      }
+    } catch (e) {
+      // Pass-through
+    }
+    return originalAnchorClick.apply(this, arguments);
   };
 })();

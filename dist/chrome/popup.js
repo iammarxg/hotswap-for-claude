@@ -93,7 +93,7 @@ function findQuickSwitchTargetId(profiles) {
 }
 
 const RESUME_PROMPT =
-  "I'm continuing a previous Claude conversation on another account. I've attached the full transcript as a Markdown file (and any original files from that conversation) — please read them for context, then continue helping me as if we'd been talking here the whole time. No need to summarize it back to me, just pick up from where it left off.";
+  "I'm continuing a previous Claude conversation. I've attached the full transcript and files — please read them for context, then continue helping me from where we left off without summarizing the past dialogue.";
 
 function sendMessage(message) {
   return new Promise((resolve) => {
@@ -610,7 +610,7 @@ async function handleRemove(profile) {
 // page DOM and the filesystem, so it costs zero tokens/credits.
 async function handleExport() {
   exportBtn.disabled = true;
-  showStatus("Reading the conversation on this tab…");
+  showStatus("Reading the conversation and thoughts on this tab…");
   const res = await sendMessage({ type: "EXPORT_CHAT" });
   exportBtn.disabled = false;
   if (!res?.ok) {
@@ -619,11 +619,10 @@ async function handleExport() {
   }
   const attachmentNote =
     res.attachmentsSaved || res.attachmentsFailed
-      ? ` ${res.attachmentsSaved} attachment(s) saved` +
-        (res.attachmentsFailed ? `, ${res.attachmentsFailed} couldn't be downloaded.` : ".")
+      ? ` (${res.attachmentsSaved} attachment(s) saved${res.attachmentsFailed ? `, ${res.attachmentsFailed} failed` : ""})`
       : "";
   showStatus(
-    `Exported "${res.title}" (${res.messageCount} messages) to ${res.filename}.${attachmentNote} Attach the folder's contents to your first message on the other account.`,
+    `Exported "${res.title}" (${res.messageCount} turns) to ${res.folder}/.${attachmentNote}`,
     "success"
   );
   copyPromptBtn.classList.remove("hidden");
@@ -798,3 +797,25 @@ autoRefreshInterval.addEventListener("change", handleAutoRefreshChange);
 refreshSessionsBtn.addEventListener("click", handleRefreshSessions);
 
 loadAutoRefreshSettings();
+
+// ---------- Export directory setting ----------
+const exportParentInput = document.getElementById("export-parent-input");
+
+async function loadExportFolderSetting() {
+  if (!exportParentInput) return;
+  const stored = await chrome.storage.local.get("exportParentFolder");
+  if (stored.exportParentFolder) {
+    exportParentInput.value = stored.exportParentFolder;
+  }
+}
+
+if (exportParentInput) {
+  exportParentInput.addEventListener("change", async () => {
+    const val = exportParentInput.value.trim() || "HotSwap-Claude-Exports";
+    await chrome.storage.local.set({ exportParentFolder: val });
+    showStatus(`Export folder set to "${val}".`, "success");
+  });
+}
+
+loadExportFolderSetting();
+
