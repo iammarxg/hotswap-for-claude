@@ -39,6 +39,13 @@ hotswap-for-claude-extension/
 │       ├── popup.html, popup.js, popup.css
 │       └── icons/
 │
+├── website/                      # 🌐 [HOMEPAGE & SUPPORT PORTAL (CLOUDFLARE PAGES)]
+│   ├── index.html                # Responsive landing page & support form
+│   ├── styles.css                # Dark theme stylesheet
+│   ├── app.js                    # Support form logic & email formatter (support@jeddah.dev)
+│   ├── assets/                   # Self-contained logos and screenshots
+│   └── functions/api/contact.js  # Optional Cloudflare Pages API endpoint
+│
 └── store-assets/                 # 🔒 [PRIVATE / MARKETING & VERSIONED ASSETS]
     └── v1.0.0/                   # Version release archives
         ├── hotswap-for-claude-chrome-v1.0.0.zip  # Chrome store package
@@ -115,7 +122,28 @@ The `.github/workflows/release.yml` GitHub Actions pipeline is active on this re
 
 ---
 
+## 🌐 Hosting the Homepage & Support Portal (Cloudflare Pages)
+
+The `website/` directory contains a static landing page and support contact portal with built-in email formatting for `support@jeddah.dev`.
+
+### Method A: Cloudflare Direct Upload (Zero Setup — Deploy in 1 Minute)
+1. Go to [dash.cloudflare.com](https://dash.cloudflare.com/) ➔ **Workers & Pages** ➔ **Create application** ➔ **Pages**.
+2. Click **Upload assets** and name the project `hotswap-for-claude`.
+3. Drag and drop the `website/` folder.
+4. Click **Deploy site**. It will instantly be live at `https://hotswap-for-claude.pages.dev` with free SSL and CDN.
+
+### Method B: GitHub Git Integration (Auto-Deploy on Push)
+1. Go to **Workers & Pages** ➔ **Pages** ➔ **Connect to Git**.
+2. Select your repository `hotswap-for-claude-extension`.
+3. Build Settings:
+   - **Root directory**: `website`
+   - **Build output directory**: `.` (or `website`)
+4. Click **Save and Deploy**. Every push to `main` will now automatically update your live site!
+
+---
+
 ## 📜 License
 
 * **Open-Source Dev Code (`src/`)**: Licensed under [Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](./src/LICENSE). Free for individuals, non-commercial use, forks, and contributions. Commercial use requires a commercial license agreement.
 * **Store & Marketing Assets (`store-assets/`)**: All Rights Reserved.
+

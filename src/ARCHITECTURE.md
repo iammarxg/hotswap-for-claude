@@ -61,6 +61,13 @@ hotswap-for-claude-extension/
 │       ├── popup.html, popup.js, popup.css
 │       └── icons/
 │
+├── website/                            # 🌐 [HOMEPAGE & SUPPORT PORTAL (CLOUDFLARE PAGES)]
+│   ├── index.html                      # Responsive landing page & support form
+│   ├── styles.css                      # Modern dark theme stylesheet
+│   ├── app.js                          # Contact form logic & email formatter (support@jeddah.dev)
+│   ├── assets/                         # Self-contained logos and screenshots
+│   └── functions/api/contact.js        # Optional Cloudflare Pages API endpoint
+│
 └── store-assets/                       # [PRIVATE / VERSIONED STORE & MARKETING ASSETS]
     └── v1.0.0/                         # Version archive folder (v1.0.0, v1.1.0, etc.)
         ├── hotswap-for-claude-chrome-v1.0.0.zip  # Chrome Web Store package
