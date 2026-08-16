@@ -200,7 +200,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
   detectPreciseEnvironment();
 
-  // 4. Support Form Submission
+  // 4. Custom Styled Category Dropdown
+  const customSelect = document.getElementById('custom-category-select');
+  const triggerBtn = document.getElementById('category-trigger');
+  const categoryValueSpan = triggerBtn ? triggerBtn.querySelector('.custom-select-value') : null;
+  const categoryHiddenInput = document.getElementById('contact-category');
+  const customOptions = document.querySelectorAll('.custom-option');
+
+  if (customSelect && triggerBtn) {
+    triggerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = customSelect.classList.contains('open');
+      customSelect.classList.toggle('open', !isOpen);
+      triggerBtn.setAttribute('aria-expanded', String(!isOpen));
+    });
+
+    customOptions.forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const val = opt.getAttribute('data-value');
+        const display = opt.getAttribute('data-display') || opt.textContent.trim();
+
+        // Update hidden input
+        if (categoryHiddenInput) categoryHiddenInput.value = val;
+
+        // Update display text/icon
+        if (categoryValueSpan) categoryValueSpan.textContent = display;
+
+        // Update active class
+        customOptions.forEach(o => {
+          o.classList.remove('selected');
+          o.setAttribute('aria-selected', 'false');
+        });
+        opt.classList.add('selected');
+        opt.setAttribute('aria-selected', 'true');
+
+        // Close dropdown
+        customSelect.classList.remove('open');
+        triggerBtn.setAttribute('aria-expanded', 'false');
+      });
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!customSelect.contains(e.target)) {
+        customSelect.classList.remove('open');
+        triggerBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    // Keyboard navigation
+    customSelect.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        customSelect.classList.remove('open');
+        triggerBtn.setAttribute('aria-expanded', 'false');
+        triggerBtn.focus();
+      }
+    });
+  }
+
+  // 5. Support Form Submission
   const form = document.getElementById('support-form');
   const nameInput = document.getElementById('contact-name');
   const emailInput = document.getElementById('contact-email');

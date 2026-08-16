@@ -350,14 +350,39 @@
               <div class="form-row">
                 <div class="form-group">
                   <label for="contact-category">Inquiry Category</label>
-                  <select id="contact-category" name="category" required>
-                    <option value="Bug Report">🐛 Bug Report / Issue</option>
-                    <option value="Feature Request">💡 Feature Request</option>
-                    <option value="Account Switching Help">🔑 Account Switching Help</option>
-                    <option value="Chat Export Issue">📦 Chat Export / Attachment Issue</option>
-                    <option value="Commercial License">🏢 Commercial License Inquiry</option>
-                    <option value="General Inquiry" selected>💬 General Inquiry</option>
-                  </select>
+                  <div class="custom-select" id="custom-category-select">
+                    <button type="button" class="custom-select-trigger" id="category-trigger" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="custom-select-value">💬 General Inquiry</span>
+                      <svg class="custom-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                    <div class="custom-select-options" role="listbox" id="category-options">
+                      <div class="custom-option" role="option" data-value="Bug Report" data-display="🐛 Bug Report / Issue">
+                        <span class="opt-icon">🐛</span>
+                        <span class="opt-text">Bug Report / Issue</span>
+                      </div>
+                      <div class="custom-option" role="option" data-value="Feature Request" data-display="💡 Feature Request">
+                        <span class="opt-icon">💡</span>
+                        <span class="opt-text">Feature Request</span>
+                      </div>
+                      <div class="custom-option" role="option" data-value="Account Switching Help" data-display="🔑 Account Switching Help">
+                        <span class="opt-icon">🔑</span>
+                        <span class="opt-text">Account Switching Help</span>
+                      </div>
+                      <div class="custom-option" role="option" data-value="Chat Export Issue" data-display="📦 Chat Export / Attachment Issue">
+                        <span class="opt-icon">📦</span>
+                        <span class="opt-text">Chat Export / Attachment Issue</span>
+                      </div>
+                      <div class="custom-option" role="option" data-value="Commercial License" data-display="🏢 Commercial License Inquiry">
+                        <span class="opt-icon">🏢</span>
+                        <span class="opt-text">Commercial License Inquiry</span>
+                      </div>
+                      <div class="custom-option selected" role="option" data-value="General Inquiry" data-display="💬 General Inquiry" aria-selected="true">
+                        <span class="opt-icon">💬</span>
+                        <span class="opt-text">General Inquiry</span>
+                      </div>
+                    </div>
+                    <input type="hidden" id="contact-category" name="category" value="General Inquiry">
+                  </div>
                 </div>
 
                 <div class="form-group">
