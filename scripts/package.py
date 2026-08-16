@@ -13,6 +13,7 @@ RUNTIME_FILES = [
     "background.js",
     "blob-capture-init.js",
     "export-page-script.js",
+    "zip-builder.js",
     "popup.html",
     "popup.js",
     "popup.css",

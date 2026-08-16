@@ -622,7 +622,7 @@ async function handleExport() {
       ? ` (${res.attachmentsSaved} attachment(s) saved${res.attachmentsFailed ? `, ${res.attachmentsFailed} failed` : ""})`
       : "";
   showStatus(
-    `Exported "${res.title}" (${res.messageCount} turns) to ${res.folder}/.${attachmentNote}`,
+    `Exported "${res.title}" (${res.messageCount} turns) as "${res.filename}".${attachmentNote}`,
     "success"
   );
   copyPromptBtn.classList.remove("hidden");
@@ -826,7 +826,7 @@ function normalizeExportPath(raw) {
 function updateExportPreview(folderName) {
   if (!exportPreviewPath) return;
   const safe = folderName || DEFAULT_EXPORT_FOLDER;
-  exportPreviewPath.innerHTML = `Target: <code>Downloads/${safe}/</code>`;
+  exportPreviewPath.innerHTML = `Target: <code>Downloads/${safe}/&lt;ChatTitle&gt;_&lt;Date&gt;_&lt;ID&gt;.zip</code>`;
 }
 
 async function loadExportFolderSetting() {

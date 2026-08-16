@@ -4,6 +4,7 @@
 // Popup and background communicate via chrome.runtime.sendMessage.
 
 import { exportClaudeConversationInPage } from "./export-page-script.js";
+import { SimpleZip } from "./zip-builder.js";
 
 
 const DOMAINS = ["claude.ai", ".claude.ai"]; // apex + wildcard subdomain cookies
@@ -1046,7 +1047,7 @@ async function resolveNativeDownload(att, capturedDownloads, usedIds, exportFold
   return { localPath: null, nativeDownloadPath: finalItem.filename || null };
 }
 
-// Scrapes the conversation DOM and saves it locally. Zero tokens spent.
+// Scrapes the conversation DOM and saves it locally as a single ZIP bundle. Zero tokens spent.
 async function exportActiveChat() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.url || !/^https:\/\/claude\.ai\/chat\//.test(tab.url)) {
@@ -1055,7 +1056,7 @@ async function exportActiveChat() {
     );
   }
 
-  const { result, captured: capturedDownloads } = await withCapturedDownloads(() =>
+  const { result } = await withCapturedDownloads(() =>
     chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: exportClaudeConversationInPage,
@@ -1073,14 +1074,13 @@ async function exportActiveChat() {
   const parentFolder = (parentSettings.exportParentFolder || DEFAULT_EXPORT_PARENT).replace(/[\\/]+/g, "").trim() || DEFAULT_EXPORT_PARENT;
 
   const chatSubfolder = formatExportFolderName(injectionResult.title, injectionResult.chatId);
-  const exportFolder = `${parentFolder}/${chatSubfolder}`;
-  const transcriptPath = `${exportFolder}/transcript.md`;
+  const zipFilename = `${parentFolder}/${chatSubfolder}.zip`;
 
   // 1. Assign local relative paths for all attachments
   let attachmentIndex = 0;
   for (const m of injectionResult.messages) {
     for (const att of m.attachments || []) {
-      if (!att.url && !att.nativeDownloadTriggered && !att.dataUrl && !att.pastedText) {
+      if (!att.url && !att.dataUrl && !att.pastedText) {
         att.localPath = null;
         continue;
       }
@@ -1095,41 +1095,36 @@ async function exportActiveChat() {
     }
   }
 
-  // 2. Save the transcript.md FIRST so the export directory is created
-  const markdown = buildMarkdownTranscript(injectionResult);
-  const dataUrl = "data:text/markdown;charset=utf-8," + encodeURIComponent(markdown);
-  const transcriptDownloadId = await chrome.downloads.download({
-    url: dataUrl,
-    filename: transcriptPath,
-    saveAs: false,
-  });
-  const transcriptResult = await waitForDownloadSettled(transcriptDownloadId);
-  if (!transcriptResult.ok) {
-    throw new Error(
-      `The transcript file didn't finish saving (${transcriptResult.error}).`
-    );
-  }
+  // 2. Build the in-memory ZIP bundle
+  const zip = new SimpleZip();
 
-  // 3. Sequentially save all attachments inside the newly created attachments/ folder
+  // Add transcript.md to root of zip
+  const markdown = buildMarkdownTranscript(injectionResult);
+  zip.addFile("transcript.md", markdown);
+
+  // Add attachments to attachments/ in zip (deduplicated by entry path)
   let attachmentsSaved = 0;
   let attachmentsFailed = 0;
-  const usedDownloadIds = new Set();
+  const addedZipEntries = new Set();
 
   for (const m of injectionResult.messages) {
     for (const att of m.attachments || []) {
       if (!att.localName) continue;
-      const localName = att.localName;
+      const entryPath = `attachments/${att.localName}`;
+      if (addedZipEntries.has(entryPath)) continue;
+      addedZipEntries.add(entryPath);
 
       if (att.dataUrl) {
-        const relativePath = `${exportFolder}/attachments/${localName}`;
         try {
-          const downloadId = await chrome.downloads.download({
-            url: att.dataUrl,
-            filename: relativePath,
-            saveAs: false,
-          });
-          const settled = await waitForDownloadSettled(downloadId);
-          if (settled.ok) {
+          const base64Index = att.dataUrl.indexOf(",");
+          if (base64Index !== -1) {
+            const base64 = att.dataUrl.slice(base64Index + 1);
+            const binaryStr = atob(base64);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+              bytes[i] = binaryStr.charCodeAt(i);
+            }
+            zip.addFile(entryPath, bytes);
             attachmentsSaved++;
           } else {
             att.localPath = null;
@@ -1140,16 +1135,19 @@ async function exportActiveChat() {
           attachmentsFailed++;
         }
       } else if (att.pastedText) {
-        const relativePath = `${exportFolder}/attachments/${localName}`;
-        const dataUrl = "data:text/plain;charset=utf-8," + encodeURIComponent(att.pastedText);
         try {
-          const downloadId = await chrome.downloads.download({
-            url: dataUrl,
-            filename: relativePath,
-            saveAs: false,
-          });
-          const settled = await waitForDownloadSettled(downloadId);
-          if (settled.ok) {
+          zip.addFile(entryPath, att.pastedText);
+          attachmentsSaved++;
+        } catch (err) {
+          att.localPath = null;
+          attachmentsFailed++;
+        }
+      } else if (att.url) {
+        try {
+          const res = await fetch(att.url);
+          if (res.ok) {
+            const buffer = await res.arrayBuffer();
+            zip.addFile(entryPath, buffer);
             attachmentsSaved++;
           } else {
             att.localPath = null;
@@ -1159,36 +1157,30 @@ async function exportActiveChat() {
           att.localPath = null;
           attachmentsFailed++;
         }
-      } else if (att.url) {
-        const relativePath = `${exportFolder}/attachments/${localName}`;
-        const success = await downloadAttachmentFile(att.url, relativePath);
-        if (success) {
-          attachmentsSaved++;
-        } else {
-          att.localPath = null;
-          attachmentsFailed++;
-        }
-      } else {
-        const { localPath, nativeDownloadPath } = await resolveNativeDownload(
-          att,
-          capturedDownloads,
-          usedDownloadIds,
-          exportFolder,
-          localName
-        );
-        att.localPath = localPath;
-        att.nativeDownloadPath = nativeDownloadPath;
-        if (localPath || nativeDownloadPath) attachmentsSaved++;
-        else attachmentsFailed++;
       }
     }
+  }
+
+  // 3. Trigger ONE single download for the entire ZIP bundle!
+  const zipDataUrl = zip.toDataUrl();
+  const downloadId = await chrome.downloads.download({
+    url: zipDataUrl,
+    filename: zipFilename,
+    saveAs: false,
+  });
+
+  const settled = await waitForDownloadSettled(downloadId);
+  if (!settled.ok) {
+    throw new Error(
+      `The export zip bundle failed to save (${settled.error}).`
+    );
   }
 
   return {
     messageCount: injectionResult.messages.length,
     title: injectionResult.title,
-    folder: exportFolder,
-    filename: transcriptPath,
+    folder: parentFolder,
+    filename: zipFilename,
     attachmentsSaved,
     attachmentsFailed,
     transcriptSaved: true,
