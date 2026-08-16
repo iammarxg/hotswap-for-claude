@@ -235,6 +235,18 @@ body {
   border-color: var(--border-active);
   transform: translateY(-1px);
 }
+.btn-badge-soon {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(91, 108, 255, 0.25);
+  color: #a2afff;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(91, 108, 255, 0.4);
+  margin-left: 2px;
+}
 .btn-block {
   width: 100%;
 }
@@ -805,17 +817,37 @@ body {
   font-weight: 600;
   color: var(--text-primary);
 }
-.footer-meta {
+.footer-links {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 .footer-link {
-  color: var(--accent-primary);
+  color: var(--text-secondary);
   text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: color 0.2s ease;
 }
 .footer-link:hover {
+  color: var(--accent-primary);
   text-decoration: underline;
+}
+.footer-dot {
+  color: var(--border-subtle);
+  font-size: 0.8rem;
+}
+.footer-badge-soon {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  margin-left: 4px;
 }
 .footer-copy {
   width: 100%;

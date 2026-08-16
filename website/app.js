@@ -62,41 +62,143 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 3. Client Environment Auto-Detection
+  // 3. Client Environment Auto-Detection (High Precision)
   const envInput = document.getElementById('contact-env');
+  let detectedClientEnv = 'Chrome on Windows';
 
-  function detectEnvironment() {
-    const ua = navigator.userAgent;
-    let browser = 'Chrome';
-    let os = 'Windows';
+  async function detectPreciseEnvironment() {
+    const lang = navigator.language || 'en-US';
+    let browserName = 'Browser';
+    let browserVersion = '';
+    let osName = 'Unknown OS';
+    let arch = '';
 
-    if (ua.includes('Firefox/')) {
-      const v = ua.split('Firefox/')[1]?.split(' ')[0] || '';
-      browser = `Firefox ${v}`;
-    } else if (ua.includes('Edg/')) {
-      const v = ua.split('Edg/')[1]?.split(' ')[0] || '';
-      browser = `Edge ${v}`;
-    } else if (ua.includes('Chrome/')) {
-      const v = ua.split('Chrome/')[1]?.split(' ')[0] || '';
-      browser = `Chrome ${v}`;
-    } else if (ua.includes('Safari/') && !ua.includes('Chrome/')) {
-      browser = 'Safari';
+    // A. Use modern User-Agent Client Hints API (Chromium / Edge / Brave / Chrome)
+    if (navigator.userAgentData) {
+      try {
+        const highEntropy = await navigator.userAgentData.getHighEntropyValues([
+          'platform',
+          'platformVersion',
+          'architecture',
+          'bitness',
+          'uaFullVersion',
+          'fullVersionList'
+        ]);
+
+        const platform = highEntropy.platform || navigator.userAgentData.platform;
+        const pVersion = highEntropy.platformVersion || '';
+
+        if (platform === 'Windows') {
+          const major = parseInt((pVersion.split('.')[0] || '0'), 10);
+          if (major >= 13) {
+            osName = 'Windows 11';
+          } else if (major >= 1) {
+            osName = 'Windows 10';
+          } else {
+            osName = 'Windows';
+          }
+        } else if (platform === 'macOS') {
+          const major = pVersion.split('.')[0];
+          osName = major ? `macOS ${major}` : 'macOS';
+        } else if (platform === 'Android') {
+          osName = pVersion ? `Android ${pVersion}` : 'Android';
+        } else if (platform === 'Linux') {
+          osName = 'Linux';
+        } else if (platform === 'Chrome OS') {
+          osName = 'ChromeOS';
+        } else {
+          osName = platform || 'Desktop';
+        }
+
+        if (highEntropy.architecture) {
+          arch = (highEntropy.architecture === 'x86' && highEntropy.bitness === '64') ? 'x64' : highEntropy.architecture;
+        }
+
+        if (navigator.brave && typeof navigator.brave.isBrave === 'function' && await navigator.brave.isBrave()) {
+          browserName = 'Brave';
+        }
+
+        const brands = highEntropy.fullVersionList || navigator.userAgentData.brands || [];
+        const edgeBrand = brands.find(b => b.brand.includes('Microsoft Edge') || b.brand.includes('Edge'));
+        const chromeBrand = brands.find(b => b.brand === 'Google Chrome' || b.brand === 'Chrome');
+        const vivaldiBrand = brands.find(b => b.brand.includes('Vivaldi'));
+        const operaBrand = brands.find(b => b.brand.includes('Opera'));
+
+        if (edgeBrand) {
+          browserName = 'Microsoft Edge';
+          browserVersion = edgeBrand.version;
+        } else if (vivaldiBrand) {
+          browserName = 'Vivaldi';
+          browserVersion = vivaldiBrand.version;
+        } else if (operaBrand) {
+          browserName = 'Opera';
+          browserVersion = operaBrand.version;
+        } else if (browserName === 'Brave') {
+          browserVersion = highEntropy.uaFullVersion || (chromeBrand ? chromeBrand.version : '');
+        } else if (chromeBrand) {
+          browserName = 'Chrome';
+          browserVersion = chromeBrand.version || highEntropy.uaFullVersion || '';
+        } else if (brands.length > 0) {
+          const significant = brands.find(b => !b.brand.includes('Not') && !b.brand.includes('Chromium'));
+          if (significant) {
+            browserName = significant.brand;
+            browserVersion = significant.version;
+          }
+        }
+      } catch (e) {
+        // Fall through to User-Agent parser
+      }
     }
 
-    if (ua.includes('Win')) os = 'Windows';
-    else if (ua.includes('Mac')) os = 'macOS';
-    else if (ua.includes('Linux')) os = 'Linux';
-    else if (ua.includes('Android')) os = 'Android';
-    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+    // B. Fallback parser if User-Agent Client Hints did not populate everything
+    if (!browserVersion || osName === 'Unknown OS') {
+      const ua = navigator.userAgent;
 
-    const lang = navigator.language || 'en-US';
-    return `${browser} on ${os} (${lang})`;
+      if (ua.includes('Firefox/')) {
+        browserName = 'Firefox';
+        browserVersion = ua.match(/Firefox\/([\d.]+)/)?.[1] || '';
+      } else if (ua.includes('Edg/')) {
+        browserName = 'Microsoft Edge';
+        browserVersion = ua.match(/Edg\/([\d.]+)/)?.[1] || '';
+      } else if (ua.includes('OPR/') || ua.includes('Opera/')) {
+        browserName = 'Opera';
+        browserVersion = ua.match(/(?:OPR|Opera)\/([\d.]+)/)?.[1] || '';
+      } else if (ua.includes('Chrome/')) {
+        if (!browserName || browserName === 'Browser') browserName = 'Chrome';
+        if (!browserVersion) browserVersion = ua.match(/Chrome\/([\d.]+)/)?.[1] || '';
+      } else if (ua.includes('Safari/') && !ua.includes('Chrome')) {
+        browserName = 'Safari';
+        browserVersion = ua.match(/Version\/([\d.]+)/)?.[1] || '';
+      }
+
+      if (osName === 'Unknown OS') {
+        if (ua.includes('Windows NT 10.0')) osName = 'Windows 10 / 11';
+        else if (ua.includes('Windows NT 6.3')) osName = 'Windows 8.1';
+        else if (ua.includes('Windows NT 6.2')) osName = 'Windows 8';
+        else if (ua.includes('Windows NT 6.1')) osName = 'Windows 7';
+        else if (ua.includes('Mac OS X')) {
+          const v = ua.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g, '.') || '';
+          osName = v ? `macOS ${v}` : 'macOS';
+        } else if (ua.includes('Linux')) osName = 'Linux';
+        else if (ua.includes('Android')) {
+          const v = ua.match(/Android ([\d.]+)/)?.[1] || '';
+          osName = v ? `Android ${v}` : 'Android';
+        } else if (ua.includes('iPhone') || ua.includes('iPad')) {
+          osName = 'iOS';
+        }
+      }
+    }
+
+    const browserPart = browserVersion ? `${browserName} ${browserVersion}` : browserName;
+    const archPart = arch ? `, ${arch}` : '';
+    detectedClientEnv = `${browserPart} on ${osName} (${lang}${archPart})`;
+
+    if (envInput) {
+      envInput.value = detectedClientEnv;
+    }
   }
 
-  const clientEnv = detectEnvironment();
-  if (envInput) {
-    envInput.value = clientEnv;
-  }
+  detectPreciseEnvironment();
 
   // 4. Support Form Submission
   const form = document.getElementById('support-form');
@@ -149,7 +251,7 @@ HOTSWAP FOR CLAUDE — SUPPORT REQUEST
 • Inquiry Category: ${category}
 • Sender Name: ${name}
 • Sender Email: ${email}
-• Client Environment: ${clientEnv}
+• Client Environment: ${detectedClientEnv}
 • Timestamp: ${timestampStr}
 =====================================================
 
