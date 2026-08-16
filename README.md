@@ -1,6 +1,10 @@
 # HotSwap for Claude — Master Repository
 
-Private monorepo and source control for **HotSwap for Claude** (Chrome Extension).
+Private monorepo and source control for **HotSwap for Claude** (Chrome & Firefox Extension).
+
+- **Official Website**: [https://hotswap.jeddah.dev](https://hotswap.jeddah.dev)
+- **Chrome Web Store Link**: [HotSwap for Claude](https://chromewebstore.google.com/detail/hotswap-for-claude/nnpnmjhealgmnbinplmccegkecabcpdk) (ID: `nnpnmjhealgmnbinplmccegkecabcpdk`)
+- **Engineering Support**: `support@jeddah.dev`
 
 ---
 

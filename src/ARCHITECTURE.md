@@ -2,16 +2,20 @@
 
 This document provides a comprehensive technical overview of the Chrome Extension codebase for AI agents, developers, and maintainers.
 
+- **Live Website**: [https://hotswap.jeddah.dev](https://hotswap.jeddah.dev)
+- **Chrome Web Store ID**: `nnpnmjhealgmnbinplmccegkecabcpdk`
+- **Support Contact**: `support@jeddah.dev`
+
 ---
 
 ## 1. Overview & Core Purpose
 
 The **HotSwap for Claude (v1.0.0)** is a Manifest V3 Chrome extension designed to solve three main problems when using Claude.ai:
 
-1. **Multi-Account Switching without Token Revocation**:
+1. **Multi-Account Switching without Getting Logged Out**:
    - Claude.ai's authentication cookies are `HttpOnly`, which content scripts cannot read or write.
-   - Claude's native "Log out" button revokes the session token server-side.
-   - This extension uses the background `chrome.cookies` API to take snapshots of active sessions and switch between them cleanly. It provides a "Start new account" flow that only clears local cookies, preserving token validity.
+   - Claude's native "Log out" button invalidates and expires the session token on the server.
+   - This extension uses the background `chrome.cookies` API to take snapshots of active sessions and switch between them cleanly. It provides a "Start new account" flow that only clears local cookies, keeping your sessions permanently valid and active.
 
 2. **Direct Usage Limit Tracking**:
    - Instead of depending on third-party extensions or DOM scraping, it queries Claude's `/api/organizations/{orgId}/usage` endpoint directly.

@@ -1,7 +1,12 @@
 # HotSwap for Claude
 
-A Manifest V3 Chrome extension for quickly hot-swapping between multiple
-Claude.ai account sessions without manually logging out and back in.
+A Manifest V3 browser extension for quickly hot-swapping between multiple Claude.ai account sessions, tracking live 5-hour & weekly limits, keeping sessions active, and exporting conversations to Markdown.
+
+- **Website**: [https://hotswap.jeddah.dev](https://hotswap.jeddah.dev)
+- **Chrome Web Store**: [Extension Link](https://chromewebstore.google.com/detail/hotswap-for-claude/nnpnmjhealgmnbinplmccegkecabcpdk) (ID: `nnpnmjhealgmnbinplmccegkecabcpdk`)
+- **Support**: `support@jeddah.dev`
+
+---
 
 ## How it works
 

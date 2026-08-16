@@ -29,7 +29,7 @@ website/
 4. Set a project name (e.g., `hotswap-for-claude` or `hotswap-claude`).
 5. Drag and drop the `website/` folder directly into the upload dropzone (or select the folder).
 6. Click **Deploy site**.
-7. Your site is instantly live at `https://<project-name>.pages.dev` with free SSL, global CDN, and DDoS protection!
+7. Your site is live! You can link your custom domain **`https://hotswap.jeddah.dev`** under **Custom domains** tab in Cloudflare Pages.
 
 ---
 
@@ -45,7 +45,7 @@ Once you push this repository to GitHub:
    * **Build output directory**: `website`
    * **Root directory**: `website` (or `/`)
 4. Click **Save and Deploy**.
-5. Every time you push changes to your GitHub `main` branch, Cloudflare Pages will automatically rebuild and deploy the new version!
+5. Every time you push changes to your GitHub `main` branch, Cloudflare Pages will automatically rebuild and deploy the new version to `https://hotswap.jeddah.dev`!
 
 ---
 
@@ -71,7 +71,8 @@ Because `support@jeddah.dev` receives emails for multiple products and services,
 HOTSWAP FOR CLAUDE — SUPPORT REQUEST
 =====================================================
 • Product: HotSwap for Claude (v1.0.0)
-• Submitted From: https://hotswap-claude.pages.dev/
+• Extension ID: nnpnmjhealgmnbinplmccegkecabcpdk
+• Submitted From: https://hotswap.jeddah.dev
 • Inquiry Category: [Bug Report | Feature Request | Account Switching | Commercial License]
 • Sender Name: <User's Name>
 • Sender Email: <User's Email>
@@ -85,6 +86,11 @@ USER MESSAGE:
 -----------------------------------------------------
 ```
 
-Users can either:
-1. Click **Send via Email Client** to automatically trigger their default mail app (Outlook, Apple Mail, Thunderbird, etc.) with the pre-filled subject and body.
-2. Click **Copy Formatted Request** to copy the formatted text and paste it into webmail (Gmail, Yahoo, Fastmail).
+---
+
+## 🔗 Important Links
+
+* **Live Website**: [https://hotswap.jeddah.dev](https://hotswap.jeddah.dev)
+* **Chrome Web Store**: [https://chromewebstore.google.com/detail/hotswap-for-claude/nnpnmjhealgmnbinplmccegkecabcpdk](https://chromewebstore.google.com/detail/hotswap-for-claude/nnpnmjhealgmnbinplmccegkecabcpdk)
+* **Chrome Extension ID**: `nnpnmjhealgmnbinplmccegkecabcpdk`
+
