@@ -9,6 +9,77 @@
 export async function exportClaudeConversationInPage() {
   document.documentElement.setAttribute("data-claude-export-active", "true");
 
+  if (!window.__claudeExportBlobRegistry) {
+    window.__claudeExportBlobRegistry = new Map();
+  }
+  window.__claudeLastCapturedBlob = null;
+
+  // Dynamic URL.createObjectURL hook
+  if (!window.__claudeCreateObjectUrlHooked) {
+    window.__claudeCreateObjectUrlHooked = true;
+    const origCreate = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = function (obj) {
+      const url = origCreate(obj);
+      try {
+        if (obj instanceof Blob || (typeof File !== "undefined" && obj instanceof File)) {
+          const item = {
+            objectUrl: url,
+            blob: obj,
+            dataUrl: null,
+            size: obj.size,
+            mimeType: obj.type || "application/octet-stream",
+            filename: obj.name || null,
+            timestamp: Date.now(),
+          };
+          window.__claudeExportBlobRegistry.set(url, item);
+
+          const reader = new FileReader();
+          reader.onload = () => {
+            item.dataUrl = reader.result;
+          };
+          reader.readAsDataURL(obj);
+        }
+      } catch (e) {}
+      return url;
+    };
+  }
+
+  // Dynamic HTMLAnchorElement.prototype.click hook
+  if (!window.__claudeAnchorClickHooked) {
+    window.__claudeAnchorClickHooked = true;
+    const origClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      try {
+        const isExportActive =
+          document.documentElement.getAttribute("data-claude-export-active") === "true";
+        const href = this.getAttribute("href") || this.href || "";
+        const downloadName = this.getAttribute("download") || this.download || "";
+
+        if (href) {
+          let item = window.__claudeExportBlobRegistry.get(href);
+          if (!item) {
+            item = {
+              objectUrl: href,
+              blob: null,
+              dataUrl: href.startsWith("data:") ? href : null,
+              filename: downloadName || null,
+              mimeType: "application/octet-stream",
+              timestamp: Date.now(),
+            };
+            window.__claudeExportBlobRegistry.set(href, item);
+          }
+          if (downloadName) item.filename = downloadName;
+          window.__claudeLastCapturedBlob = item;
+
+          if (isExportActive) {
+            return; // Suppress native download prompt
+          }
+        }
+      } catch (e) {}
+      return origClick.apply(this, arguments);
+    };
+  }
+
   try {
     function serializeNode(node) {
       if (node.nodeType === Node.TEXT_NODE) return node.textContent;
@@ -469,6 +540,7 @@ export async function exportClaudeConversationInPage() {
 
     async function resolveAllAttachments(store) {
       const downloadedCards = new Map(); // filename -> dataUrl
+      const attemptedFilenames = new Set();
 
       for (const item of store.values()) {
         for (const att of item.attachments) {
@@ -476,8 +548,15 @@ export async function exportClaudeConversationInPage() {
             // Reuse dataUrl if this exact file was already downloaded in an earlier turn
             if (downloadedCards.has(att.filename)) {
               att.dataUrl = downloadedCards.get(att.filename);
+              delete att.node;
               continue;
             }
+
+            if (attemptedFilenames.has(att.filename)) {
+              delete att.node;
+              continue; // Don't trigger duplicate download attempts for the same file
+            }
+            attemptedFilenames.add(att.filename);
 
             try {
               const outcome = await downloadArtifactOrAttachment(att.node, att.filename);
@@ -496,6 +575,15 @@ export async function exportClaudeConversationInPage() {
               // Remove DOM reference before serialization to avoid cyclic clones
               delete att.node;
             }
+          }
+        }
+      }
+
+      // Propagate captured dataUrls to any duplicate referenced attachments
+      for (const item of store.values()) {
+        for (const att of item.attachments) {
+          if (!att.dataUrl && downloadedCards.has(att.filename)) {
+            att.dataUrl = downloadedCards.get(att.filename);
           }
         }
       }
