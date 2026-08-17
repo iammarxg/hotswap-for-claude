@@ -92,7 +92,7 @@ def build_firefox(manifest, version_assets_dir):
     firefox_manifest["browser_specific_settings"] = {
         "gecko": {
             "id": "hotswap-for-claude@extension",
-            "strict_min_version": "109.0",
+            "strict_min_version": "142.0",
             "data_collection_permissions": {
                 "required": ["none"]
             }
