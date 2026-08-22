@@ -12,6 +12,7 @@ STORE_ASSETS_DIR = os.path.join(PROJECT_ROOT, "store-assets")
 RUNTIME_FILES = [
     "background.js",
     "blob-capture-init.js",
+    "sse-bridge-content.js",
     "export-page-script.js",
     "zip-builder.js",
     "popup.html",
