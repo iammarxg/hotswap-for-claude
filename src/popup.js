@@ -366,7 +366,16 @@ function buildUsageDetail(usage) {
   const entries = LIMIT_ORDER.map((key) => [key, usage.limits?.[key]]).filter(
     ([, v]) => v && typeof v.percentage === "number"
   );
-  if (entries.length === 0) return null;
+  if (entries.length === 0) {
+    const notice = document.createElement("div");
+    notice.className = "usage-notice";
+    if (usage.subscriptionTier === "claude_free" || !usage.subscriptionTier || usage.subscriptionTier === "free") {
+      notice.textContent = "Send a message on Claude.ai to view your current free-plan limits.";
+    } else {
+      notice.textContent = "Usage data unavailable. Try reloading Claude.ai.";
+    }
+    return notice;
+  }
 
   const wrap = document.createElement("div");
   wrap.className = "usage-detail";

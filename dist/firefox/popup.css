@@ -924,3 +924,17 @@ body {
   border-radius: 3px;
 }
 
+
+
+/* Notice shown when no limits are reported on Free plans yet */
+.usage-notice {
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 8px 10px;
+  background-color: var(--surface-raised);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  margin-top: 6px;
+  line-height: 1.4;
+  text-align: center;
+}

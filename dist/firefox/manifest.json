@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HotSwap for Claude",
-  "version": "1.1.0",
+  "version": "1.0.1",
   "description": "Hot-swap between multiple Claude.ai accounts instantly without getting logged out, track live 5h/weekly quotas, keep sessions active, and export conversations to resume elsewhere.",
   "permissions": [
     "cookies",

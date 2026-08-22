@@ -1,3 +1,70 @@
+
+// ---------- Free Plan SSE Usage Cache & Monotonic Fallback ----------
+const SSE_USAGE_KEY = "hotswap_sse_usage";
+const SSE_USAGE_TTL_MS = 8 * 24 * 60 * 60 * 1000; // 8 days (weekly window TTL)
+const SSE_SAME_WINDOW_TOLERANCE_MS = 15 * 1000; // 15 seconds
+
+async function getStoredSseUsageMap() {
+  const data = await chrome.storage.local.get([SSE_USAGE_KEY]);
+  return data[SSE_USAGE_KEY] || {};
+}
+
+function mergeSseWindow(previous, incoming) {
+  if (!incoming) return previous || null;
+  if (!previous) return incoming;
+
+  // If in the same window (same reset time within tolerance), protect against downward rounding jitter
+  const sameWindow =
+    Math.abs((previous.resetsAt || 0) - (incoming.resetsAt || 0)) < SSE_SAME_WINDOW_TOLERANCE_MS;
+  if (sameWindow && incoming.percentage < previous.percentage) {
+    return previous;
+  }
+  return incoming;
+}
+
+export async function storeSseUsage(orgId, incomingLimits) {
+  if (!orgId || !incomingLimits) return;
+
+  const sseMap = await getStoredSseUsageMap();
+  const prev = sseMap[orgId] || {};
+
+  const merged = {
+    session: mergeSseWindow(prev.session, incomingLimits.session),
+    weekly: mergeSseWindow(prev.weekly, incomingLimits.weekly),
+    capturedAt: Date.now(),
+  };
+
+  sseMap[orgId] = merged;
+  await chrome.storage.local.set({ [SSE_USAGE_KEY]: sseMap });
+
+  // If this org belongs to a saved profile or active session, update its usage immediately
+  const profiles = await getProfiles();
+  let updated = false;
+  for (const [id, prof] of Object.entries(profiles)) {
+    // Check if profile cookies match this orgId or if active
+    const orgCookie = prof.cookies?.find((c) => c.name === "lastActiveOrg")?.value;
+    if (orgCookie === orgId || id === (await getActiveProfileId())) {
+      if (prof.usage?.subscriptionTier === "claude_free" || !prof.usage?.subscriptionTier) {
+        prof.usage = {
+          limits: {
+            session: merged.session,
+            weekly: merged.weekly,
+            sonnetWeekly: null,
+            opusWeekly: null,
+            fableWeekly: null,
+          },
+          subscriptionTier: prof.usage?.subscriptionTier || "claude_free",
+          capturedAt: Date.now(),
+        };
+        updated = true;
+      }
+    }
+  }
+  if (updated) {
+    await saveProfiles(profiles);
+    await updateBadge();
+  }
+}
 // background.js — MV3 service worker
 // Handles all cookie capture / restore logic for claude.ai account switching,
 // plus chat export so a conversation can be resumed on another account.
@@ -305,8 +372,6 @@ async function fetchUsageForActiveSession() {
   const usageResponse = await claudeApiGet(`/organizations/${orgId}/usage`);
   const limits = parseUsageLimits(usageResponse);
 
-  // Subscription tier is a nice-to-have label, not required for the
-  // percentages themselves — don't let it fail the whole fetch.
   let subscriptionTier = "claude_free";
   try {
     const bootstrap = await claudeApiGet(`/bootstrap/${orgId}/app_start?statsig_hashing_algorithm=djb2`);
@@ -314,6 +379,21 @@ async function fetchUsageForActiveSession() {
     subscriptionTier = computeSubscriptionTier(org);
   } catch (err) {
     console.warn("Could not determine subscription tier", err);
+  }
+
+  // Fallback for Claude Free Plan: /usage returns null for all limits on free accounts.
+  // We fall back to the live SSE stream snapshot captured from chat completions.
+  if (subscriptionTier === "claude_free" && !limits.session && !limits.weekly) {
+    const sseMap = await getStoredSseUsageMap();
+    const sseData = sseMap[orgId];
+    if (sseData) {
+      if (sseData.session && sseData.session.resetsAt && sseData.session.resetsAt > Date.now()) {
+        limits.session = sseData.session;
+      }
+      if (sseData.weekly && sseData.weekly.resetsAt && sseData.weekly.resetsAt > Date.now()) {
+        limits.weekly = sseData.weekly;
+      }
+    }
   }
 
   return { limits, subscriptionTier, orgId };
@@ -1227,6 +1307,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
       switch (message.type) {
+        case "SSE_USAGE_UPDATE": {
+          await storeSseUsage(message.orgId, message.sseLimits);
+          sendResponse({ ok: true });
+          break;
+        }
         case "GET_PROFILES": {
           const profiles = await getProfiles();
           const activeId = await getActiveProfileId();
