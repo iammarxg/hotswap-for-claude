@@ -1,4 +1,3 @@
-
 // ---------- Free Plan SSE Usage Cache & Monotonic Fallback ----------
 const SSE_USAGE_KEY = "hotswap_sse_usage";
 const SSE_USAGE_TTL_MS = 8 * 24 * 60 * 60 * 1000; // 8 days (weekly window TTL)
@@ -381,16 +380,15 @@ async function fetchUsageForActiveSession() {
     console.warn("Could not determine subscription tier", err);
   }
 
-  // Fallback for Claude Free Plan: /usage returns null for all limits on free accounts.
-  // We fall back to the live SSE stream snapshot captured from chat completions.
+  // Free Plan Fallback: When /usage answers with nulls/empty on claude_free
   if (subscriptionTier === "claude_free" && !limits.session && !limits.weekly) {
     const sseMap = await getStoredSseUsageMap();
     const sseData = sseMap[orgId];
     if (sseData) {
-      if (sseData.session && sseData.session.resetsAt && sseData.session.resetsAt > Date.now()) {
+      if (sseData.session?.resetsAt && sseData.session.resetsAt > Date.now()) {
         limits.session = sseData.session;
       }
-      if (sseData.weekly && sseData.weekly.resetsAt && sseData.weekly.resetsAt > Date.now()) {
+      if (sseData.weekly?.resetsAt && sseData.weekly.resetsAt > Date.now()) {
         limits.weekly = sseData.weekly;
       }
     }
