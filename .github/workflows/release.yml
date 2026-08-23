@@ -52,18 +52,9 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.VERSION }}-b${{ github.run_number }}
-          name: HotSwap for Claude v${{ env.VERSION }} (Build #${{ github.run_number }})
-          body: |
-            ## 🚀 Automated Production Build #${{ github.run_number }}
-
-            ### 📦 Release Assets
-            - **Google Chrome**: `hotswap-for-claude-chrome-v${{ env.VERSION }}.zip` (Manifest V3)
-            - **Mozilla Firefox**: `hotswap-for-claude-firefox-v${{ env.VERSION }}.zip` (Gecko MV3)
-
-            ---
-            *Commit: `${{ github.sha }}`*
-            *Triggered by commit: ${{ github.event.head_commit.message }}*
+          tag_name: v${{ env.VERSION }}
+          name: HotSwap for Claude v${{ env.VERSION }}
+          body_path: CHANGELOG.md
           draft: false
           prerelease: false
           files: |
