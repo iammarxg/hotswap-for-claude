@@ -55,7 +55,7 @@ const SHORTCUTS = [
 
 function renderShortcutsList() {
   if (!shortcutsListEl) return;
-  shortcutsListEl.innerHTML = "";
+  shortcutsListEl.textContent = "";
   for (const { label, keys } of SHORTCUTS) {
     const li = document.createElement("li");
 
@@ -243,7 +243,7 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
 }
 
 function renderProfiles(profiles, activeId, query = "") {
-  listEl.innerHTML = "";
+  listEl.textContent = "";
   const entries = sortedEntries(profiles);
   // The quick-switch-1 target is picked by usage data (least 5-hour
   // credit used), not by list position, so compute it once up front —
@@ -257,7 +257,7 @@ function renderProfiles(profiles, activeId, query = "") {
 
   if (current) {
     currentSectionEl.classList.remove("hidden");
-    currentListEl.innerHTML = "";
+    currentListEl.textContent = "";
     currentListEl.appendChild(
       buildProfileItem(current, { activeId, isCurrent: true })
     );
@@ -835,7 +835,10 @@ function normalizeExportPath(raw) {
 function updateExportPreview(folderName) {
   if (!exportPreviewPath) return;
   const safe = folderName || DEFAULT_EXPORT_FOLDER;
-  exportPreviewPath.innerHTML = `Target: <code>Downloads/${safe}/&lt;ChatTitle&gt;_&lt;Date&gt;_&lt;ID&gt;.zip</code>`;
+  exportPreviewPath.textContent = "Target: ";
+  const codeEl = document.createElement("code");
+  codeEl.textContent = `Downloads/${safe}/<ChatTitle>_<Date>_<ID>.zip`;
+  exportPreviewPath.appendChild(codeEl);
 }
 
 async function loadExportFolderSetting() {
