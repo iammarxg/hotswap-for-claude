@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -26,12 +28,12 @@ jobs:
           python-version: "3.11"
 
       - name: Run Production Packager
-        run: python scripts/package.py
+        run: python package.py
 
       - name: Read Extension Version
         id: get_version
         run: |
-          VERSION=$(python -c "import json; print(json.load(open('src/manifest.json'))['version'])")
+          VERSION=$(python -c "import json; print(json.load(open('extension/manifest.json'))['version'])")
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Extracted version: $VERSION"
 
@@ -58,8 +60,8 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            store-assets/v${{ env.VERSION }}/hotswap-for-claude-chrome-v${{ env.VERSION }}.zip
-            store-assets/v${{ env.VERSION }}/hotswap-for-claude-firefox-v${{ env.VERSION }}.zip
-            store-assets/v${{ env.VERSION }}/hotswap-for-claude-v${{ env.VERSION }}.zip
+            dist/hotswap-for-claude-chrome-v${{ env.VERSION }}.zip
+            dist/hotswap-for-claude-firefox-v${{ env.VERSION }}.zip
+            dist/hotswap-for-claude-v${{ env.VERSION }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -23,3 +23,14 @@ yarn-error.log*
 # Build scratch and temporary archives at root
 *.tmp
 *.bak
+dist/
+build/
+.env
+
+# Private master development & marketing assets
+src/
+scripts/
+website/
+store-assets/
+Export-feature-testing/
+deploy-website.*
