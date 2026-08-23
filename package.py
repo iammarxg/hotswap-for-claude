@@ -12,7 +12,11 @@ def load_manifest():
     if not os.path.exists(manifest_path):
         raise FileNotFoundError(f"Missing manifest.json at {manifest_path}")
     with open(manifest_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        manifest = json.load(f)
+    desc = manifest.get("description", "")
+    if len(desc) > 132:
+        raise ValueError(f"Manifest description too long: {len(desc)} chars (max 132 for Chrome Web Store):\n'{desc}'")
+    return manifest
 
 def create_zip(source_dir, output_zip_path):
     os.makedirs(os.path.dirname(output_zip_path), exist_ok=True)
