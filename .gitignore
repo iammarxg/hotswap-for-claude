@@ -34,3 +34,8 @@ website/
 store-assets/
 Export-feature-testing/
 deploy-website.*
+
+# Internal maintainer & LLM memory files (never leak to public GitHub)
+MEMORY.md
+*MEMORY*.md
+INTERNAL_*.md
