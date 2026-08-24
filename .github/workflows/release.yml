@@ -59,7 +59,7 @@ jobs:
           body_path: CHANGELOG.md
           draft: false
           prerelease: false
-          make_latest: false
+          make_latest: true
           files: |
             dist/hotswap-for-claude-chrome-v${{ env.VERSION }}.zip
             dist/hotswap-for-claude-firefox-v${{ env.VERSION }}.zip

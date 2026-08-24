@@ -169,6 +169,39 @@
       </section>
 
       <section class="panel">
+        <h2 class="eyebrow">Export directory</h2>
+        <div class="panel-body">
+          <p class="hint">
+            Location where chat exports &amp; attachments will be saved.
+          </p>
+          <div class="folder-picker-group">
+            <div class="folder-input-wrapper">
+              <span class="folder-prefix-tag">Downloads /</span>
+              <input
+                id="export-parent-input"
+                type="text"
+                class="folder-input"
+                placeholder="HotSwap-Claude-Exports"
+                value="HotSwap-Claude-Exports"
+                spellcheck="false"
+              />
+            </div>
+            <div class="folder-btn-row">
+              <button id="browse-folder-btn" class="btn btn-ghost btn-sm" type="button" title="Choose a folder using system picker">
+                📁 Choose folder…
+              </button>
+              <button id="reset-folder-btn" class="btn btn-ghost btn-sm" type="button" title="Reset to default">
+                Reset
+              </button>
+            </div>
+          </div>
+          <p id="export-preview-path" class="export-preview-path">
+            Target: <code>Downloads/HotSwap-Claude-Exports/</code>
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
         <h2 class="eyebrow">Keyboard shortcuts</h2>
         <div class="panel-body">
           <ul id="shortcuts-list" class="shortcuts-list"></ul>

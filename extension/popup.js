@@ -55,7 +55,7 @@ const SHORTCUTS = [
 
 function renderShortcutsList() {
   if (!shortcutsListEl) return;
-  shortcutsListEl.innerHTML = "";
+  shortcutsListEl.textContent = "";
   for (const { label, keys } of SHORTCUTS) {
     const li = document.createElement("li");
 
@@ -93,7 +93,7 @@ function findQuickSwitchTargetId(profiles) {
 }
 
 const RESUME_PROMPT =
-  "I'm continuing a previous Claude conversation on another account. I've attached the full transcript as a Markdown file (and any original files from that conversation) — please read them for context, then continue helping me as if we'd been talking here the whole time. No need to summarize it back to me, just pick up from where it left off.";
+  "I'm continuing a previous Claude conversation. I've attached the full transcript and files — please read them for context, then continue helping me from where we left off without summarizing the past dialogue.";
 
 function sendMessage(message) {
   return new Promise((resolve) => {
@@ -243,7 +243,7 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
 }
 
 function renderProfiles(profiles, activeId, query = "") {
-  listEl.innerHTML = "";
+  listEl.textContent = "";
   const entries = sortedEntries(profiles);
   // The quick-switch-1 target is picked by usage data (least 5-hour
   // credit used), not by list position, so compute it once up front —
@@ -257,7 +257,7 @@ function renderProfiles(profiles, activeId, query = "") {
 
   if (current) {
     currentSectionEl.classList.remove("hidden");
-    currentListEl.innerHTML = "";
+    currentListEl.textContent = "";
     currentListEl.appendChild(
       buildProfileItem(current, { activeId, isCurrent: true })
     );
@@ -366,7 +366,16 @@ function buildUsageDetail(usage) {
   const entries = LIMIT_ORDER.map((key) => [key, usage.limits?.[key]]).filter(
     ([, v]) => v && typeof v.percentage === "number"
   );
-  if (entries.length === 0) return null;
+  if (entries.length === 0) {
+    const notice = document.createElement("div");
+    notice.className = "usage-notice";
+    if (usage.subscriptionTier === "claude_free" || !usage.subscriptionTier || usage.subscriptionTier === "free") {
+      notice.textContent = "Send a message on Claude.ai to view your current free-plan limits.";
+    } else {
+      notice.textContent = "Usage data unavailable. Try reloading Claude.ai.";
+    }
+    return notice;
+  }
 
   const wrap = document.createElement("div");
   wrap.className = "usage-detail";
@@ -610,7 +619,7 @@ async function handleRemove(profile) {
 // page DOM and the filesystem, so it costs zero tokens/credits.
 async function handleExport() {
   exportBtn.disabled = true;
-  showStatus("Reading the conversation on this tab…");
+  showStatus("Reading the conversation and thoughts on this tab…");
   const res = await sendMessage({ type: "EXPORT_CHAT" });
   exportBtn.disabled = false;
   if (!res?.ok) {
@@ -619,11 +628,10 @@ async function handleExport() {
   }
   const attachmentNote =
     res.attachmentsSaved || res.attachmentsFailed
-      ? ` ${res.attachmentsSaved} attachment(s) saved` +
-        (res.attachmentsFailed ? `, ${res.attachmentsFailed} couldn't be downloaded.` : ".")
+      ? ` (${res.attachmentsSaved} attachment(s) saved${res.attachmentsFailed ? `, ${res.attachmentsFailed} failed` : ""})`
       : "";
   showStatus(
-    `Exported "${res.title}" (${res.messageCount} messages) to ${res.filename}.${attachmentNote} Attach the folder's contents to your first message on the other account.`,
+    `Exported "${res.title}" (${res.messageCount} turns) as "${res.filename}".${attachmentNote}`,
     "success"
   );
   copyPromptBtn.classList.remove("hidden");
@@ -798,3 +806,96 @@ autoRefreshInterval.addEventListener("change", handleAutoRefreshChange);
 refreshSessionsBtn.addEventListener("click", handleRefreshSessions);
 
 loadAutoRefreshSettings();
+
+// ---------- Export directory setting ----------
+const exportParentInput = document.getElementById("export-parent-input");
+const browseFolderBtn = document.getElementById("browse-folder-btn");
+const resetFolderBtn = document.getElementById("reset-folder-btn");
+const exportPreviewPath = document.getElementById("export-preview-path");
+
+const DEFAULT_EXPORT_FOLDER = "HotSwap-Claude-Exports";
+
+function normalizeExportPath(raw) {
+  if (!raw) return DEFAULT_EXPORT_FOLDER;
+  let cleaned = raw.trim().replace(/\\+/g, "/");
+
+  // If user pasted a full absolute path, extract the part inside Downloads
+  const dlMatch = cleaned.match(/(?:^|\/|\\)Downloads\/(.+)$/i);
+  if (dlMatch && dlMatch[1]) {
+    cleaned = dlMatch[1];
+  } else {
+    // Strip drive letters, leading/trailing slashes, and ../ traversals
+    cleaned = cleaned.replace(/^[a-zA-Z]:\/?/, "").replace(/^[\/.]+/, "").replace(/[\/.]+$/, "");
+  }
+
+  cleaned = cleaned.replace(/\/{2,}/g, "/").trim();
+  return cleaned || DEFAULT_EXPORT_FOLDER;
+}
+
+function updateExportPreview(folderName) {
+  if (!exportPreviewPath) return;
+  const safe = folderName || DEFAULT_EXPORT_FOLDER;
+  exportPreviewPath.textContent = "Target: ";
+  const codeEl = document.createElement("code");
+  codeEl.textContent = `Downloads/${safe}/<ChatTitle>_<Date>_<ID>.zip`;
+  exportPreviewPath.appendChild(codeEl);
+}
+
+async function loadExportFolderSetting() {
+  if (!exportParentInput) return;
+  const stored = await chrome.storage.local.get("exportParentFolder");
+  const folder = stored.exportParentFolder || DEFAULT_EXPORT_FOLDER;
+  exportParentInput.value = folder;
+  updateExportPreview(folder);
+}
+
+if (exportParentInput) {
+  exportParentInput.addEventListener("input", () => {
+    const val = normalizeExportPath(exportParentInput.value);
+    updateExportPreview(val);
+  });
+
+  exportParentInput.addEventListener("change", async () => {
+    const val = normalizeExportPath(exportParentInput.value);
+    exportParentInput.value = val;
+    await chrome.storage.local.set({ exportParentFolder: val });
+    updateExportPreview(val);
+    showStatus(`Export folder set to "Downloads/${val}/".`, "success");
+  });
+}
+
+if (browseFolderBtn) {
+  browseFolderBtn.addEventListener("click", async () => {
+    try {
+      if (typeof window.showDirectoryPicker === "function") {
+        const dirHandle = await window.showDirectoryPicker({ mode: "read" });
+        if (dirHandle && dirHandle.name) {
+          const folderName = normalizeExportPath(dirHandle.name);
+          exportParentInput.value = folderName;
+          await chrome.storage.local.set({ exportParentFolder: folderName });
+          updateExportPreview(folderName);
+          showStatus(`Export folder set to "Downloads/${folderName}/".`, "success");
+        }
+      } else {
+        exportParentInput.focus();
+        showStatus("Type or paste your desired folder path below.", "info");
+      }
+    } catch (err) {
+      if (err.name !== "AbortError") {
+        exportParentInput.focus();
+      }
+    }
+  });
+}
+
+if (resetFolderBtn) {
+  resetFolderBtn.addEventListener("click", async () => {
+    exportParentInput.value = DEFAULT_EXPORT_FOLDER;
+    await chrome.storage.local.set({ exportParentFolder: DEFAULT_EXPORT_FOLDER });
+    updateExportPreview(DEFAULT_EXPORT_FOLDER);
+    showStatus(`Export folder reset to "Downloads/${DEFAULT_EXPORT_FOLDER}/".`, "success");
+  });
+}
+
+loadExportFolderSetting();
+

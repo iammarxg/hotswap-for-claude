@@ -1,9 +1,76 @@
+// ---------- Free Plan SSE Usage Cache & Monotonic Fallback ----------
+const SSE_USAGE_KEY = "hotswap_sse_usage";
+const SSE_USAGE_TTL_MS = 8 * 24 * 60 * 60 * 1000; // 8 days (weekly window TTL)
+const SSE_SAME_WINDOW_TOLERANCE_MS = 15 * 1000; // 15 seconds
+
+async function getStoredSseUsageMap() {
+  const data = await chrome.storage.local.get([SSE_USAGE_KEY]);
+  return data[SSE_USAGE_KEY] || {};
+}
+
+function mergeSseWindow(previous, incoming) {
+  if (!incoming) return previous || null;
+  if (!previous) return incoming;
+
+  // If in the same window (same reset time within tolerance), protect against downward rounding jitter
+  const sameWindow =
+    Math.abs((previous.resetsAt || 0) - (incoming.resetsAt || 0)) < SSE_SAME_WINDOW_TOLERANCE_MS;
+  if (sameWindow && incoming.percentage < previous.percentage) {
+    return previous;
+  }
+  return incoming;
+}
+
+export async function storeSseUsage(orgId, incomingLimits) {
+  if (!orgId || !incomingLimits) return;
+
+  const sseMap = await getStoredSseUsageMap();
+  const prev = sseMap[orgId] || {};
+
+  const merged = {
+    session: mergeSseWindow(prev.session, incomingLimits.session),
+    weekly: mergeSseWindow(prev.weekly, incomingLimits.weekly),
+    capturedAt: Date.now(),
+  };
+
+  sseMap[orgId] = merged;
+  await chrome.storage.local.set({ [SSE_USAGE_KEY]: sseMap });
+
+  // If this org belongs to a saved profile or active session, update its usage immediately
+  const profiles = await getProfiles();
+  let updated = false;
+  for (const [id, prof] of Object.entries(profiles)) {
+    // Check if profile cookies match this orgId or if active
+    const orgCookie = prof.cookies?.find((c) => c.name === "lastActiveOrg")?.value;
+    if (orgCookie === orgId || id === (await getActiveProfileId())) {
+      if (prof.usage?.subscriptionTier === "claude_free" || !prof.usage?.subscriptionTier) {
+        prof.usage = {
+          limits: {
+            session: merged.session,
+            weekly: merged.weekly,
+            sonnetWeekly: null,
+            opusWeekly: null,
+            fableWeekly: null,
+          },
+          subscriptionTier: prof.usage?.subscriptionTier || "claude_free",
+          capturedAt: Date.now(),
+        };
+        updated = true;
+      }
+    }
+  }
+  if (updated) {
+    await saveProfiles(profiles);
+    await updateBadge();
+  }
+}
 // background.js — MV3 service worker
 // Handles all cookie capture / restore logic for claude.ai account switching,
 // plus chat export so a conversation can be resumed on another account.
 // Popup and background communicate via chrome.runtime.sendMessage.
 
 import { exportClaudeConversationInPage } from "./export-page-script.js";
+import { SimpleZip } from "./zip-builder.js";
 
 
 const DOMAINS = ["claude.ai", ".claude.ai"]; // apex + wildcard subdomain cookies
@@ -304,8 +371,6 @@ async function fetchUsageForActiveSession() {
   const usageResponse = await claudeApiGet(`/organizations/${orgId}/usage`);
   const limits = parseUsageLimits(usageResponse);
 
-  // Subscription tier is a nice-to-have label, not required for the
-  // percentages themselves — don't let it fail the whole fetch.
   let subscriptionTier = "claude_free";
   try {
     const bootstrap = await claudeApiGet(`/bootstrap/${orgId}/app_start?statsig_hashing_algorithm=djb2`);
@@ -313,6 +378,20 @@ async function fetchUsageForActiveSession() {
     subscriptionTier = computeSubscriptionTier(org);
   } catch (err) {
     console.warn("Could not determine subscription tier", err);
+  }
+
+  // Free Plan Fallback: When /usage answers with nulls/empty on claude_free
+  if (subscriptionTier === "claude_free" && !limits.session && !limits.weekly) {
+    const sseMap = await getStoredSseUsageMap();
+    const sseData = sseMap[orgId];
+    if (sseData) {
+      if (sseData.session?.resetsAt && sseData.session.resetsAt > Date.now()) {
+        limits.session = sseData.session;
+      }
+      if (sseData.weekly?.resetsAt && sseData.weekly.resetsAt > Date.now()) {
+        limits.weekly = sseData.weekly;
+      }
+    }
   }
 
   return { limits, subscriptionTier, orgId };
@@ -830,12 +909,23 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // ---------- Chat export ----------
 
+const DEFAULT_EXPORT_PARENT = "HotSwap-Claude-Exports";
+
 function sanitizeFilename(s) {
   return s
     .replace(/[^a-z0-9\-_ ]+/gi, "")
     .trim()
     .replace(/\s+/g, "-")
-    .slice(0, 50) || "chat";
+    .slice(0, 45) || "chat";
+}
+
+function formatExportFolderName(title, chatId) {
+  const cleanTitle = sanitizeFilename(title);
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+  const cleanId = (chatId || "").replace(/[^a-z0-9_-]/gi, "").slice(0, 8) || "chat";
+  return `${cleanTitle}_${dateStr}_${cleanId}`;
 }
 
 // Attachment filenames come pre-sanitized from the page script (slashes,
@@ -857,15 +947,6 @@ function ensureExtension(filename, url, type) {
   return filename + (extensionFromUrl(url) || (type === "image" ? ".png" : ""));
 }
 
-// chrome.downloads.download() resolving just means Chrome accepted the
-// request and assigned it an ID — it does NOT mean the file landed on
-// disk. A download can still be interrupted afterward (flagged by Safe
-// Browsing, blocked by an AV/Gatekeeper-style scan, disk full, etc.),
-// and that failure surfaces only as a later change to the download item's
-// `state`, never as a rejected promise. Code that treats a resolved
-// promise as "saved" will report success on exports that actually wrote
-// nothing. This waits for the item to reach a terminal state so we know
-// which one actually happened.
 function waitForDownloadSettled(downloadId, timeoutMs = 15000) {
   return new Promise((resolve) => {
     let settled = false;
@@ -884,9 +965,6 @@ function waitForDownloadSettled(downloadId, timeoutMs = 15000) {
       }
     };
     chrome.downloads.onChanged.addListener(onChanged);
-    // In case the download already finished before we attached the
-    // listener (fast local data: URLs sometimes do), check current state
-    // directly rather than waiting on an event that already fired.
     chrome.downloads.search({ id: downloadId }, (items) => {
       const item = items?.[0];
       if (!item) return;
@@ -897,10 +975,6 @@ function waitForDownloadSettled(downloadId, timeoutMs = 15000) {
   });
 }
 
-// Uses chrome.downloads directly on the attachment's URL rather than
-// fetch() — this goes through the browser's normal download/network stack
-// (cookies included) instead of an extension-context fetch, which sidesteps
-// CORS restrictions a page-level fetch would otherwise hit.
 async function downloadAttachmentFile(url, relativePath) {
   try {
     const downloadId = await chrome.downloads.download({ url, filename: relativePath, saveAs: false });
@@ -913,57 +987,81 @@ async function downloadAttachmentFile(url, relativePath) {
   }
 }
 
-
 function buildMarkdownTranscript(data) {
   const lines = [];
+
+  // 1. AI-Facing Context Header
+  lines.push("<!-- SYSTEM CONTEXT FOR CLAUDE:");
+  lines.push("This file contains the complete transcript of a prior Claude conversation.");
+  lines.push("Instructions:");
+  lines.push("1. Absorb all context, decisions, code, thinking processes, and attached files from this transcript.");
+  lines.push("2. Continue directly from the final turn without summarizing or re-explaining the past dialogue.");
+  lines.push("3. Respond to the user's latest query as a seamless continuation of this session.");
+  lines.push("-->");
+  lines.push("");
+
+  // 2. Human Quick Guide
   lines.push(`# ${data.title}`);
   lines.push("");
-  lines.push(`> Exported from claude.ai on ${new Date(data.exportedAt).toLocaleString()}`);
-  lines.push(`> Original conversation: ${data.url}`);
-  lines.push("");
-  lines.push(
-    "> **To resume this conversation on another account:** attach this file (and anything in the accompanying `attachments/` folder) to your first message and say something like \"Here's the transcript of a previous conversation — please read it and continue from where it left off.\" This costs far fewer tokens than re-explaining everything by hand."
-  );
+  lines.push("> **To resume this conversation in another account:**");
+  lines.push("> 1. Attach this `transcript.md` (and any files from `attachments/`) to your first message.");
+  lines.push('> 2. Paste: *"Please read the attached transcript and continue our session from where it left off."*');
+  lines.push(">");
+  lines.push(`> *Exported from claude.ai on ${new Date(data.exportedAt).toLocaleString()} • Original URL: ${data.url}*`);
   lines.push("");
   lines.push("---");
   lines.push("");
+
+  // 3. Message Turns with Claude Thoughts
   for (const m of data.messages) {
     lines.push(m.role === "user" ? "## 🧑 User" : "## 🤖 Claude");
     lines.push("");
-    if (m.text) {
-      lines.push(m.text);
+
+    if (m.thought && m.thought.text) {
+      if (!m.text || !m.text.trim()) {
+        lines.push("*Note: Generation stopped before final response. Preserved thought process below:*");
+        lines.push("");
+        lines.push("<details open>");
+        lines.push(`<summary>💭 <b>Claude Thought Process</b> (${m.thought.duration || "Incomplete Turn"})</summary>`);
+        lines.push("");
+        lines.push(m.thought.text);
+        lines.push("");
+        lines.push("</details>");
+        lines.push("");
+      } else {
+        lines.push("<details>");
+        lines.push(`<summary>💭 <b>Claude Thought Process</b> (${m.thought.duration || "Internal Reasoning"})</summary>`);
+        lines.push("");
+        lines.push(m.thought.text);
+        lines.push("");
+        lines.push("</details>");
+        lines.push("");
+      }
+    }
+
+    if (m.text && m.text.trim()) {
+      lines.push(m.text.trim());
       lines.push("");
     }
+
     if (m.attachments && m.attachments.length > 0) {
       lines.push("**Attached:**");
       for (const att of m.attachments) {
         if (att.localPath) {
           lines.push(`- [${att.filename}](${att.localPath})`);
-        } else if (att.nativeDownloadPath) {
-          lines.push(
-            `- ${att.filename} — saved directly to your Downloads folder as \`${att.nativeDownloadPath}\` (couldn't be bundled into this export folder, but it's on your machine)`
-          );
         } else if (att.url) {
-          lines.push(
-            `- ${att.filename} — could not be downloaded automatically; original link: ${att.url}`
-          );
+          lines.push(`- ${att.filename} — [Original Link](${att.url})`);
         } else {
-          lines.push(
-            `- ${att.filename} — referenced in this message, but its content wasn't accessible from the page (may need opening manually)`
-          );
+          lines.push(`- ${att.filename} — *(Referenced in message)*`);
         }
       }
       lines.push("");
     }
   }
+
   return lines.join("\n");
 }
 
-// Captures every chrome.downloads item created while `work` runs, so
-// downloads triggered by in-page JS (clicking claude.ai's own "Download"
-// button — there's no <a href> to scrape, it's entirely JS-driven) can be
-// matched up afterward. Returns whatever `work` returns, plus the list of
-// items seen.
 async function withCapturedDownloads(work) {
   const captured = [];
   const onCreated = (item) => captured.push(item);
@@ -976,10 +1074,6 @@ async function withCapturedDownloads(work) {
   }
 }
 
-// Chrome names duplicate downloads "file (1).zip", "file (2).zip", etc, and
-// item.filename is the OS path chrome chose relative to the Downloads root,
-// not necessarily an exact match for the name we expected. Compare the
-// basenames loosely (case-insensitive, ignoring a trailing " (n)" suffix).
 function looksLikeSameFile(expectedFilename, downloadItem) {
   const norm = (s) =>
     (s || "")
@@ -990,26 +1084,10 @@ function looksLikeSameFile(expectedFilename, downloadItem) {
   return norm(expectedFilename) === norm(downloadItem.filename);
 }
 
-// Matches a native download we captured to the attachment that likely
-// triggered it, then either relocates it into the export folder (when we
-// have a real reusable URL) or leaves it where Chrome saved it and tells
-// the caller where that was.
 async function resolveNativeDownload(att, capturedDownloads, usedIds, exportFolder, localName) {
   const unclaimed = capturedDownloads.filter((item) => !usedIds.has(item.id));
-
   let match = unclaimed.find((item) => looksLikeSameFile(att.filename, item));
 
-  // Fall back to whichever unclaimed download started closest in time to
-  // our click (openAttachmentAndTriggerDownload records the click
-  // timestamp), in case Chrome's chosen filename doesn't resemble ours at
-  // all (e.g. it used a Content-Disposition header name we can't predict).
-  // withCapturedDownloads wraps the whole page scrape — which can run for
-  // tens of seconds across many scroll steps — so without time-based
-  // correlation this fallback could just as easily grab a completely
-  // unrelated download that happened to start elsewhere in the browser
-  // during that window. Requiring it to land within 10s of the actual
-  // click keeps that from happening; if nothing qualifies, we report no
-  // match rather than guessing.
   if (!match && att.nativeDownloadTriggeredAt != null) {
     const withStart = unclaimed
       .filter((item) => item.startTime)
@@ -1024,18 +1102,12 @@ async function resolveNativeDownload(att, capturedDownloads, usedIds, exportFold
   const settled = await waitForDownloadSettled(match.id);
   if (!settled.ok) return { localPath: null, nativeDownloadPath: null };
 
-  // Re-fetch the item to get its resolved finalUrl (post-redirect) and
-  // confirmed on-disk filename.
   const items = await new Promise((resolve) =>
     chrome.downloads.search({ id: match.id }, resolve)
   );
   const finalItem = items?.[0] || match;
   const bestUrl = finalItem.finalUrl || finalItem.url;
 
-  // blob: URLs only exist inside the tab that created them — the service
-  // worker can't refetch one, so there's nothing to relocate. Leave the
-  // file where Chrome already saved it (the user's Downloads folder) and
-  // just report that path back for the transcript.
   if (!bestUrl || bestUrl.startsWith("blob:")) {
     return { localPath: null, nativeDownloadPath: finalItem.filename || null };
   }
@@ -1043,14 +1115,9 @@ async function resolveNativeDownload(att, capturedDownloads, usedIds, exportFold
   const relativePath = `${exportFolder}/attachments/${localName}`;
   const relocated = await downloadAttachmentFile(bestUrl, relativePath);
   if (relocated) {
-    // Clean up the stray copy Chrome made in the default Downloads folder
-    // so the file isn't left duplicated in two places.
     try {
       await new Promise((resolve) => chrome.downloads.removeFile(match.id, resolve));
-    } catch {
-      // Non-fatal — the relocated copy in the export folder is what
-      // matters; a leftover in Downloads is just cosmetic clutter.
-    }
+    } catch {}
     chrome.downloads.erase({ id: match.id }, () => {});
     return { localPath: `attachments/${localName}`, nativeDownloadPath: null };
   }
@@ -1058,8 +1125,7 @@ async function resolveNativeDownload(att, capturedDownloads, usedIds, exportFold
   return { localPath: null, nativeDownloadPath: finalItem.filename || null };
 }
 
-// This does NOT call any Claude API — it only reads the already-rendered
-// page DOM and writes local files. Zero tokens/credits are spent exporting.
+// Scrapes the conversation DOM and saves it locally as a single ZIP bundle. Zero tokens spent.
 async function exportActiveChat() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.url || !/^https:\/\/claude\.ai\/chat\//.test(tab.url)) {
@@ -1068,9 +1134,10 @@ async function exportActiveChat() {
     );
   }
 
-  const { result, captured: capturedDownloads } = await withCapturedDownloads(() =>
+  const { result } = await withCapturedDownloads(() =>
     chrome.scripting.executeScript({
       target: { tabId: tab.id },
+      world: "MAIN",
       func: exportClaudeConversationInPage,
     })
   );
@@ -1078,24 +1145,21 @@ async function exportActiveChat() {
 
   if (!injectionResult || !injectionResult.messages || injectionResult.messages.length === 0) {
     throw new Error(
-      "No messages found on this page. Claude's page layout may have changed since this extension was built — see the README troubleshooting section."
+      "No messages found on this page. Claude's page layout may have changed since this extension was built."
     );
   }
 
-  const exportFolder = `claude-chat-export-${sanitizeFilename(injectionResult.title)}-${Date.now()}`;
-  const transcriptPath = `${exportFolder}/transcript.md`;
+  const parentSettings = await chrome.storage.local.get("exportParentFolder");
+  const parentFolder = (parentSettings.exportParentFolder || DEFAULT_EXPORT_PARENT).replace(/[\\/]+/g, "").trim() || DEFAULT_EXPORT_PARENT;
 
-  // Download any attachments/artifacts that had a real fetchable URL,
-  // linking each one back to the message that carried it. Best-effort:
-  // some may fail (expired signed URLs, cross-origin restrictions) and
-  // are noted as such in the transcript rather than silently dropped.
+  const chatSubfolder = formatExportFolderName(injectionResult.title, injectionResult.chatId);
+  const zipFilename = `${parentFolder}/${chatSubfolder}.zip`;
+
+  // 1. Assign local relative paths for all attachments
   let attachmentIndex = 0;
-  let attachmentsSaved = 0;
-  let attachmentsFailed = 0;
-  const usedDownloadIds = new Set();
   for (const m of injectionResult.messages) {
     for (const att of m.attachments || []) {
-      if (!att.url && !att.nativeDownloadTriggered && !att.dataUrl && !att.pastedText) {
+      if (!att.url && !att.dataUrl && !att.pastedText) {
         att.localPath = null;
         continue;
       }
@@ -1105,109 +1169,100 @@ async function exportActiveChat() {
         att.url,
         att.pastedText ? "text" : att.type
       )}`;
+      att.localName = localName;
+      att.localPath = `attachments/${localName}`;
+    }
+  }
+
+  // 2. Build the in-memory ZIP bundle
+  const zip = new SimpleZip();
+
+  // Add transcript.md to root of zip
+  const markdown = buildMarkdownTranscript(injectionResult);
+  zip.addFile("transcript.md", markdown);
+
+  // Add attachments to attachments/ in zip (deduplicated by entry path)
+  let attachmentsSaved = 0;
+  let attachmentsFailed = 0;
+  const addedZipEntries = new Set();
+
+  for (const m of injectionResult.messages) {
+    for (const att of m.attachments || []) {
+      if (!att.localName) continue;
+      const entryPath = `attachments/${att.localName}`;
+      if (addedZipEntries.has(entryPath)) continue;
+      addedZipEntries.add(entryPath);
 
       if (att.dataUrl) {
-        // Bytes captured directly from the in-page Blob (see
-        // captureNextBlobDownload in export-page-script.js) — save
-        // straight into the export folder via an explicit path, exactly
-        // like the transcript below does. This is the reliable path: no
-        // chrome.downloads.onCreated matching involved, so there's nothing
-        // to mismatch and no reason for it to land anywhere but here.
-        const relativePath = `${exportFolder}/attachments/${localName}`;
-        const downloadId = await chrome.downloads.download({
-          url: att.dataUrl,
-          filename: relativePath,
-          saveAs: false,
-        });
-        const settled = await waitForDownloadSettled(downloadId);
-        if (settled.ok) {
-          att.localPath = `attachments/${localName}`;
-          attachmentsSaved++;
-        } else {
+        try {
+          const base64Index = att.dataUrl.indexOf(",");
+          if (base64Index !== -1) {
+            const base64 = att.dataUrl.slice(base64Index + 1);
+            const binaryStr = atob(base64);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+              bytes[i] = binaryStr.charCodeAt(i);
+            }
+            zip.addFile(entryPath, bytes);
+            attachmentsSaved++;
+          } else {
+            att.localPath = null;
+            attachmentsFailed++;
+          }
+        } catch (err) {
           att.localPath = null;
           attachmentsFailed++;
         }
       } else if (att.pastedText) {
-        // Not a real file — pasted-text content read straight out of the
-        // DOM (see extractPastedText). Save it as its own .txt so it isn't
-        // lost, same mechanism as the transcript's own data: URL download.
-        const relativePath = `${exportFolder}/attachments/${localName}`;
-        const dataUrl = "data:text/plain;charset=utf-8," + encodeURIComponent(att.pastedText);
-        const downloadId = await chrome.downloads.download({
-          url: dataUrl,
-          filename: relativePath,
-          saveAs: false,
-        });
-        const settled = await waitForDownloadSettled(downloadId);
-        if (settled.ok) {
-          att.localPath = `attachments/${localName}`;
+        try {
+          zip.addFile(entryPath, att.pastedText);
           attachmentsSaved++;
-        } else {
+        } catch (err) {
           att.localPath = null;
           attachmentsFailed++;
         }
       } else if (att.url) {
-        const relativePath = `${exportFolder}/attachments/${localName}`;
-        const success = await downloadAttachmentFile(att.url, relativePath);
-        if (success) {
-          att.localPath = `attachments/${localName}`;
-          attachmentsSaved++;
-        } else {
+        try {
+          const res = await fetch(att.url);
+          if (res.ok) {
+            const buffer = await res.arrayBuffer();
+            zip.addFile(entryPath, buffer);
+            attachmentsSaved++;
+          } else {
+            att.localPath = null;
+            attachmentsFailed++;
+          }
+        } catch (err) {
           att.localPath = null;
           attachmentsFailed++;
         }
-      } else {
-        // Fallback only — the blob-capture above should catch this in the
-        // normal case. Reached only if captureNextBlobDownload timed out
-        // (e.g. an unusually large or slow file) but a native download
-        // still fired; matched up against whatever chrome.downloads
-        // .onCreated actually captured, and left in the user's regular
-        // Downloads folder since a blob: URL can't be relocated from here.
-        const { localPath, nativeDownloadPath } = await resolveNativeDownload(
-          att,
-          capturedDownloads,
-          usedDownloadIds,
-          exportFolder,
-          localName
-        );
-        att.localPath = localPath;
-        att.nativeDownloadPath = nativeDownloadPath;
-        if (localPath || nativeDownloadPath) attachmentsSaved++;
-        else attachmentsFailed++;
       }
     }
   }
 
-  const markdown = buildMarkdownTranscript(injectionResult);
-  // NOTE: a Blob + URL.createObjectURL() approach was tried here, but
-  // service workers never support URL.createObjectURL() — not a
-  // Windows-vs-mac difference, it's a permanent platform limitation
-  // (there's no document for the object URL to be resolved against).
-  // A data: URL is the only option available from an MV3 background
-  // service worker. Its real downside is Chrome's URL length ceiling on
-  // very long conversations — if that's ever hit, waitForDownloadSettled
-  // below will surface it as a real error rather than a silent no-op.
-  const dataUrl = "data:text/markdown;charset=utf-8," + encodeURIComponent(markdown);
+  // 3. Trigger ONE single download for the entire ZIP bundle!
+  const zipDataUrl = zip.toDataUrl();
   const downloadId = await chrome.downloads.download({
-    url: dataUrl,
-    filename: transcriptPath,
+    url: zipDataUrl,
+    filename: zipFilename,
     saveAs: false,
   });
-  const transcriptResult = await waitForDownloadSettled(downloadId);
-  const transcriptSaved = transcriptResult.ok;
-  if (!transcriptResult.ok) {
+
+  const settled = await waitForDownloadSettled(downloadId);
+  if (!settled.ok) {
     throw new Error(
-      `The transcript file didn't finish saving (${transcriptResult.error}). Nothing may have been written to Downloads.`
+      `The export zip bundle failed to save (${settled.error}).`
     );
   }
 
   return {
     messageCount: injectionResult.messages.length,
     title: injectionResult.title,
-    filename: transcriptPath,
+    folder: parentFolder,
+    filename: zipFilename,
     attachmentsSaved,
     attachmentsFailed,
-    transcriptSaved,
+    transcriptSaved: true,
   };
 }
 
@@ -1250,6 +1305,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
       switch (message.type) {
+        case "SSE_USAGE_UPDATE": {
+          await storeSseUsage(message.orgId, message.sseLimits);
+          sendResponse({ ok: true });
+          break;
+        }
         case "GET_PROFILES": {
           const profiles = await getProfiles();
           const activeId = await getActiveProfileId();
