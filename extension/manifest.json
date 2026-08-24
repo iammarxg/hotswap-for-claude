@@ -1,0 +1,68 @@
+{
+  "manifest_version": 3,
+  "name": "HotSwap for Claude",
+  "version": "1.0.0",
+  "description": "Hot-swap between multiple Claude.ai account sessions, track usage limits, keep sessions alive, and export chats to resume elsewhere.",
+  "permissions": [
+    "cookies",
+    "storage",
+    "tabs",
+    "scripting",
+    "downloads",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://claude.ai/*",
+    "https://*.claude.ai/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://claude.ai/*",
+        "https://*.claude.ai/*"
+      ],
+      "js": [
+        "blob-capture-init.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ],
+  "commands": {
+    "cycle-next-account": {
+      "suggested_key": {
+        "default": "Alt+Shift+Right"
+      },
+      "description": "Switch to the next saved account"
+    },
+    "cycle-prev-account": {
+      "suggested_key": {
+        "default": "Alt+Shift+Left"
+      },
+      "description": "Switch to the previous saved account"
+    },
+    "quick-switch-1": {
+      "suggested_key": {
+        "default": "Alt+Shift+1"
+      },
+      "description": "Switch to the account with the most usage left"
+    }
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

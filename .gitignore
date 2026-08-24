@@ -1,0 +1,41 @@
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.directory
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node / Dependencies (if ever added)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Antigravity / Gemini internal logs or workspaces
+.gemini/
+
+# Build scratch and temporary archives at root
+*.tmp
+*.bak
+dist/
+build/
+.env
+
+# Private master development & marketing assets
+src/
+scripts/
+website/
+store-assets/
+Export-feature-testing/
+deploy-website.*
+
+# Internal maintainer & LLM memory files (never leak to public GitHub)
+MEMORY.md
+*MEMORY*.md
+INTERNAL_*.md
