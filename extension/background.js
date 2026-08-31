@@ -1,3 +1,6 @@
+import { exportClaudeConversationInPage } from "./export-page-script.js";
+import { SimpleZip } from "./zip-builder.js";
+
 // ---------- Free Plan SSE Usage Cache & Monotonic Fallback ----------
 const SSE_USAGE_KEY = "hotswap_sse_usage";
 const SSE_USAGE_TTL_MS = 8 * 24 * 60 * 60 * 1000; // 8 days (weekly window TTL)
@@ -68,10 +71,6 @@ export async function storeSseUsage(orgId, incomingLimits) {
 // Handles all cookie capture / restore logic for claude.ai account switching,
 // plus chat export so a conversation can be resumed on another account.
 // Popup and background communicate via chrome.runtime.sendMessage.
-
-import { exportClaudeConversationInPage } from "./export-page-script.js";
-import { SimpleZip } from "./zip-builder.js";
-
 
 const DOMAINS = ["claude.ai", ".claude.ai"]; // apex + wildcard subdomain cookies
 const STORAGE_KEY = "profiles";       // chrome.storage.local: { [profileId]: Profile }
@@ -1126,7 +1125,9 @@ async function resolveNativeDownload(att, capturedDownloads, usedIds, exportFold
 }
 
 // Scrapes the conversation DOM and saves it locally as a single ZIP bundle. Zero tokens spent.
-async function exportActiveChat() {
+async function exportActiveChat(options = {}) {
+  const includeAttachments = options.includeAttachments !== false;
+
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.url || !/^https:\/\/claude\.ai\/chat\//.test(tab.url)) {
     throw new Error(
@@ -1149,98 +1150,105 @@ async function exportActiveChat() {
     );
   }
 
-  const parentSettings = await chrome.storage.local.get("exportParentFolder");
-  const parentFolder = (parentSettings.exportParentFolder || DEFAULT_EXPORT_PARENT).replace(/[\\/]+/g, "").trim() || DEFAULT_EXPORT_PARENT;
-
+  const parentFolder = DEFAULT_EXPORT_PARENT;
   const chatSubfolder = formatExportFolderName(injectionResult.title, injectionResult.chatId);
   const zipFilename = `${parentFolder}/${chatSubfolder}.zip`;
 
-  // 1. Assign local relative paths for all attachments
+  // Assign local relative paths for all attachments if enabled
   let attachmentIndex = 0;
-  for (const m of injectionResult.messages) {
-    for (const att of m.attachments || []) {
-      if (!att.url && !att.dataUrl && !att.pastedText) {
-        att.localPath = null;
-        continue;
+  if (includeAttachments) {
+    for (const m of injectionResult.messages) {
+      for (const att of m.attachments || []) {
+        if (!att.url && !att.dataUrl && !att.pastedText) {
+          att.localPath = null;
+          continue;
+        }
+        attachmentIndex++;
+        const localName = `${String(attachmentIndex).padStart(2, "0")}-${ensureExtension(
+          att.filename,
+          att.url,
+          att.pastedText ? "text" : att.type
+        )}`;
+        att.localName = localName;
+        att.localPath = `attachments/${localName}`;
       }
-      attachmentIndex++;
-      const localName = `${String(attachmentIndex).padStart(2, "0")}-${ensureExtension(
-        att.filename,
-        att.url,
-        att.pastedText ? "text" : att.type
-      )}`;
-      att.localName = localName;
-      att.localPath = `attachments/${localName}`;
+    }
+  } else {
+    for (const m of injectionResult.messages) {
+      for (const att of m.attachments || []) {
+        att.localPath = null;
+      }
     }
   }
 
-  // 2. Build the in-memory ZIP bundle
+  // Build the in-memory ZIP bundle
   const zip = new SimpleZip();
-
-  // Add transcript.md to root of zip
   const markdown = buildMarkdownTranscript(injectionResult);
   zip.addFile("transcript.md", markdown);
 
-  // Add attachments to attachments/ in zip (deduplicated by entry path)
+  // Add attachments (if enabled and deduplicated by entry path)
   let attachmentsSaved = 0;
   let attachmentsFailed = 0;
-  const addedZipEntries = new Set();
 
-  for (const m of injectionResult.messages) {
-    for (const att of m.attachments || []) {
-      if (!att.localName) continue;
-      const entryPath = `attachments/${att.localName}`;
-      if (addedZipEntries.has(entryPath)) continue;
-      addedZipEntries.add(entryPath);
+  if (includeAttachments) {
+    const addedZipEntries = new Set();
 
-      if (att.dataUrl) {
-        try {
-          const base64Index = att.dataUrl.indexOf(",");
-          if (base64Index !== -1) {
-            const base64 = att.dataUrl.slice(base64Index + 1);
-            const binaryStr = atob(base64);
-            const bytes = new Uint8Array(binaryStr.length);
-            for (let i = 0; i < binaryStr.length; i++) {
-              bytes[i] = binaryStr.charCodeAt(i);
+    for (const m of injectionResult.messages) {
+      for (const att of m.attachments || []) {
+        if (!att.localName) continue;
+        const entryPath = `attachments/${att.localName}`;
+        if (addedZipEntries.has(entryPath)) continue;
+        addedZipEntries.add(entryPath);
+
+        if (att.dataUrl) {
+          try {
+            const base64Index = att.dataUrl.indexOf(",");
+            if (base64Index !== -1) {
+              const base64 = att.dataUrl.slice(base64Index + 1);
+              const binaryStr = atob(base64);
+              const bytes = new Uint8Array(binaryStr.length);
+              for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+              }
+              zip.addFile(entryPath, bytes);
+              attachmentsSaved++;
+            } else {
+              att.localPath = null;
+              attachmentsFailed++;
             }
-            zip.addFile(entryPath, bytes);
-            attachmentsSaved++;
-          } else {
+          } catch (err) {
             att.localPath = null;
             attachmentsFailed++;
           }
-        } catch (err) {
-          att.localPath = null;
-          attachmentsFailed++;
-        }
-      } else if (att.pastedText) {
-        try {
-          zip.addFile(entryPath, att.pastedText);
-          attachmentsSaved++;
-        } catch (err) {
-          att.localPath = null;
-          attachmentsFailed++;
-        }
-      } else if (att.url) {
-        try {
-          const res = await fetch(att.url);
-          if (res.ok) {
-            const buffer = await res.arrayBuffer();
-            zip.addFile(entryPath, buffer);
+        } else if (att.pastedText) {
+          try {
+            zip.addFile(entryPath, att.pastedText);
             attachmentsSaved++;
-          } else {
+          } catch (err) {
             att.localPath = null;
             attachmentsFailed++;
           }
-        } catch (err) {
-          att.localPath = null;
-          attachmentsFailed++;
+        } else if (att.url) {
+          try {
+            const res = await fetch(att.url);
+            if (res.ok) {
+              const buffer = await res.arrayBuffer();
+              zip.addFile(entryPath, buffer);
+              attachmentsSaved++;
+            } else {
+              att.localPath = null;
+              attachmentsFailed++;
+            }
+          } catch (err) {
+            att.localPath = null;
+            attachmentsFailed++;
+          }
         }
       }
     }
   }
 
-  // 3. Trigger ONE single download for the entire ZIP bundle!
+  // Trigger one single download for the entire ZIP bundle
   const zipDataUrl = zip.toDataUrl();
   const downloadId = await chrome.downloads.download({
     url: zipDataUrl,
@@ -1250,9 +1258,7 @@ async function exportActiveChat() {
 
   const settled = await waitForDownloadSettled(downloadId);
   if (!settled.ok) {
-    throw new Error(
-      `The export zip bundle failed to save (${settled.error}).`
-    );
+    throw new Error(`The export zip bundle failed to save (${settled.error}).`);
   }
 
   return {
@@ -1262,7 +1268,148 @@ async function exportActiveChat() {
     filename: zipFilename,
     attachmentsSaved,
     attachmentsFailed,
-    transcriptSaved: true,
+  };
+}
+
+// Scrapes conversation DOM and calls Gemini API to produce an intelligent summary.
+// Returns the summary text directly — no file download.
+async function summarizeChatWithGemini(options = {}) {
+  const includeFileContent = options.includeFileContent !== false;
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !tab.url || !/^https:\/\/claude\.ai\/chat\//.test(tab.url)) {
+    throw new Error(
+      "Open a claude.ai conversation tab first (a URL like claude.ai/chat/...), then click Summarize."
+    );
+  }
+
+  const injectionResults = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    world: "MAIN",
+    func: exportClaudeConversationInPage,
+    args: [{ skipDownloads: true }],
+  });
+  const injectionResult = injectionResults?.[0]?.result;
+
+  if (!injectionResult || !injectionResult.messages || injectionResult.messages.length === 0) {
+    throw new Error(
+      "No messages found on this page. Claude's page layout may have changed since this extension was built."
+    );
+  }
+
+  const stored = await chrome.storage.local.get("geminiApiKey");
+  const apiKey = (stored.geminiApiKey || "").trim();
+  if (!apiKey) {
+    throw new Error("NO_API_KEY");
+  }
+
+  // Build conversation text from DOM-extracted messages
+  const messages = injectionResult.messages || [];
+  let convText = "";
+  for (const m of messages) {
+    const role = m.role === "user" ? "User" : "Claude";
+    if (m.thought && m.thought.text) {
+      convText += `\n[Claude thinking: ${m.thought.text.slice(0, 300)}...]\n`;
+    }
+    if (m.text) {
+      convText += `\n${role}: ${m.text}\n`;
+    }
+  }
+
+  // Build optional file/code content section (capped at 30,000 chars total)
+  let fileSection = "";
+  if (includeFileContent) {
+    let fileChars = 0;
+    const MAX_FILE_CHARS = 30000;
+    const fileParts = [];
+    for (const m of messages) {
+      for (const att of m.attachments || []) {
+        if (fileChars >= MAX_FILE_CHARS) break;
+        if (att.pastedText) {
+          const remaining = MAX_FILE_CHARS - fileChars;
+          const excerpt = att.pastedText.slice(0, remaining);
+          fileParts.push(`--- File: ${att.filename || "attachment"} ---\n${excerpt}`);
+          fileChars += excerpt.length;
+        }
+      }
+      if (fileChars >= MAX_FILE_CHARS) break;
+    }
+    if (fileParts.length > 0) {
+      fileSection = `\n\n--- ATTACHED FILES & CODE ---\n${fileParts.join("\n\n")}`;
+    }
+  }
+
+  const prompt = `You are an expert AI assistant creating an executive context handoff summary of a Claude.ai conversation.
+
+The primary goal of this summary is to allow a brand new AI assistant (or human collaborator) to immediately understand everything that was discussed, decided, or created, and seamlessly continue working from where the previous session left off without missing any context.
+
+Adapt naturally to whatever topic this conversation is about (coding, research, creative writing, analysis, design, planning, math, business, etc.).
+
+Capture essential concrete details, exact names, choices, user preferences, and dislikes. Do NOT include generic fluff.
+
+Structure your summary using the following markdown sections:
+
+## 🎯 Core Objective & Topic
+- Clear summary of what the conversation set out to achieve, the main topic or problem, and overall scope.
+
+## 📌 Context, Tools & Key References
+- Specific tools, technologies, concepts, frameworks, sources, formulas, or methodologies chosen and referenced in the dialogue.
+
+## 🚫 User Preferences, Constraints & Exclusions
+- Explicit guidelines and requirements from the user.
+- Specific things the user **does NOT want**, rejected ideas/approaches, and boundaries.
+
+## 💡 Key Decisions & Discoveries
+- Important choices made, conclusions reached, problems solved, and the rationale behind them.
+
+## 📦 What Was Produced / Accomplished
+- Concrete deliverables created or modified (code, text, data models, files, outlines, answers, solutions). Name specific items and details.
+
+## ⏭️ Current State & Next Steps (Handoff)
+- Exactly where the conversation stopped, what is currently working/done, and what needs to be worked on next so a new session can seamlessly continue.
+
+--- CONVERSATION TRANSCRIPT (${messages.length} turns) ---
+${convText}${fileSection}`;
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 2500, temperature: 0.2 },
+    }),
+  });
+
+  if (!response.ok) {
+    let errMsg = `HTTP ${response.status}`;
+    try {
+      const errBody = await response.json();
+      errMsg = errBody?.error?.message || errMsg;
+    } catch {}
+    if (response.status === 400 && errMsg.toLowerCase().includes("api key")) {
+      throw new Error("Invalid Gemini API key. Please check the key in Settings.");
+    }
+    if (response.status === 403) {
+      throw new Error("Gemini API access denied. Make sure the Gemini API is enabled for your key at ai.google.dev.");
+    }
+    if (response.status === 429) {
+      throw new Error("Gemini API rate limit reached. Please try again in a moment.");
+    }
+    throw new Error(`Gemini API error: ${errMsg}`);
+  }
+
+  const data = await response.json();
+  const summaryText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  if (!summaryText.trim()) {
+    throw new Error("Gemini returned an empty response. Please try again.");
+  }
+
+  return {
+    messageCount: messages.length,
+    title: injectionResult.title,
+    summaryText,
   };
 }
 
@@ -1400,8 +1547,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           sendResponse({ ok: true, ...info });
           break;
         }
+        case "SUMMARIZE_CHAT": {
+          const info = await summarizeChatWithGemini(message.options || {});
+          sendResponse({ ok: true, ...info });
+          break;
+        }
         case "EXPORT_CHAT": {
-          const info = await exportActiveChat();
+          const info = await exportActiveChat(message.options || {});
           sendResponse({ ok: true, ...info });
           break;
         }

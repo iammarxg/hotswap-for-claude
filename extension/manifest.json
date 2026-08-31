@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HotSwap for Claude",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Hot-swap multiple Claude.ai accounts without logging out, track real-time 5h/weekly limits, and export conversations to Markdown.",
   "permissions": [
     "cookies",
@@ -13,7 +13,8 @@
   ],
   "host_permissions": [
     "https://claude.ai/*",
-    "https://*.claude.ai/*"
+    "https://*.claude.ai/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "background": {
     "service_worker": "background.js",

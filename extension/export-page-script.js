@@ -6,7 +6,7 @@
 // triggers direct in-place artifact downloads, and captures attachments
 // with zero token/credit cost.
 
-export async function exportClaudeConversationInPage() {
+export async function exportClaudeConversationInPage(options = {}) {
   document.documentElement.setAttribute("data-claude-export-active", "true");
 
   if (!window.__claudeExportBlobRegistry) {
@@ -539,6 +539,23 @@ export async function exportClaudeConversationInPage() {
     }
 
     async function resolveAllAttachments(store) {
+      if (options?.skipDownloads) {
+        for (const item of store.values()) {
+          for (const att of item.attachments) {
+            if (att.node) {
+              if (/^pasted\b/i.test(att.filename) || att.type === "text") {
+                try {
+                  att.pastedText = await extractPastedText(att.node);
+                  att.type = "text";
+                } catch (e) {}
+              }
+              delete att.node;
+            }
+          }
+        }
+        return;
+      }
+
       const downloadedCards = new Map(); // filename -> dataUrl
       const attemptedFilenames = new Set();
 

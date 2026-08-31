@@ -13,8 +13,34 @@ const newAccountBtn = document.getElementById("new-account-btn");
 const addAccountToggle = document.getElementById("add-account-toggle");
 const addAccountPanel = document.getElementById("add-account-panel");
 const warningBox = document.getElementById("warning-box");
-const exportBtn = document.getElementById("export-btn");
-const copyPromptBtn = document.getElementById("copy-prompt-btn");
+const searchSectionEl = document.getElementById("search-section");
+const savedAccountsSectionEl = document.getElementById("saved-accounts-section");
+
+// Theme selectors
+const themeQuickToggle = document.getElementById("theme-quick-toggle");
+const themeCards = document.querySelectorAll(".theme-card");
+
+// Export & Summary selectors
+const exportRawBtn = document.getElementById("export-raw-btn");
+const summarizeBtn = document.getElementById("summarize-btn");
+const optIncludeAttachments = document.getElementById("opt-include-attachments");
+const optIncludeSummaryContent = document.getElementById("opt-include-summary-content");
+const summaryHub = document.getElementById("summary-hub");
+const summaryHubTitle = document.getElementById("summary-hub-title");
+const summaryHubMetrics = document.getElementById("summary-hub-metrics");
+const copySummaryBtn = document.getElementById("copy-summary-btn");
+const togglePreviewBtn = document.getElementById("toggle-preview-btn");
+const summaryPreviewDrawer = document.getElementById("summary-preview-drawer");
+const summaryPreviewContent = document.getElementById("summary-preview-content");
+const geminiKeyStatus = document.getElementById("gemini-key-status");
+
+// Gemini settings selectors
+const geminiApiKeyInput = document.getElementById("gemini-api-key-input");
+const saveGeminiKeyBtn = document.getElementById("save-gemini-key-btn");
+const clearGeminiKeyBtn = document.getElementById("clear-gemini-key-btn");
+const geminiKeySettingsStatus = document.getElementById("gemini-key-settings-status");
+const geminiLink = document.getElementById("gemini-link");
+
 const backupBtn = document.getElementById("backup-btn");
 const restoreBtn = document.getElementById("restore-btn");
 const restoreFileInput = document.getElementById("restore-file-input");
@@ -35,47 +61,73 @@ const tabPanels = document.querySelectorAll(".tab-panel");
 const IS_MAC = /mac/i.test(
   navigator.userAgentData?.platform || navigator.platform || navigator.userAgent
 );
-const MOD_KEY = IS_MAC ? "⌥" : "Alt";
-const SHIFT_KEY = IS_MAC ? "⇧" : "Shift";
 
-const SHORTCUTS = [
-  {
-    label: "Switch to the account with the most usage left",
-    keys: [MOD_KEY, SHIFT_KEY, "1"],
-  },
-  {
-    label: "Cycle to next account",
-    keys: [MOD_KEY, SHIFT_KEY, "→"],
-  },
-  {
-    label: "Cycle to previous account",
-    keys: [MOD_KEY, SHIFT_KEY, "←"],
-  },
-];
+// Maps manifest command names to human-readable descriptions
+const COMMAND_LABELS = {
+  "quick-switch-1": "Switch to account with most usage left ⚡",
+  "cycle-next-account": "Cycle to next account →",
+  "cycle-prev-account": "Cycle to previous account ←",
+};
 
-function renderShortcutsList() {
+// Parses a Chrome shortcut string like "Alt+Shift+Right" into display-friendly kbd tokens.
+// On Mac, remaps Alt→⌥ and Shift→⇧.
+function parseShortcutToKbds(shortcut) {
+  if (!shortcut) return [];
+  return shortcut.split("+").map((part) => {
+    if (IS_MAC) {
+      if (part === "Alt" || part === "MacCtrl") return "⌥";
+      if (part === "Shift") return "⇧";
+      if (part === "Ctrl") return "⌘";
+    }
+    const arrowMap = { Left: "←", Right: "→", Up: "↑", Down: "↓" };
+    return arrowMap[part] || part;
+  });
+}
+
+async function loadDynamicShortcuts() {
   if (!shortcutsListEl) return;
   shortcutsListEl.textContent = "";
-  for (const { label, keys } of SHORTCUTS) {
+  try {
+    const commands = await chrome.commands.getAll();
+    for (const cmd of commands) {
+      const label = COMMAND_LABELS[cmd.name];
+      if (!label) continue;
+
+      const li = document.createElement("li");
+
+      const labelEl = document.createElement("span");
+      labelEl.textContent = label;
+
+      const keysEl = document.createElement("span");
+      keysEl.className = "shortcut-keys";
+
+      if (cmd.shortcut) {
+        const tokens = parseShortcutToKbds(cmd.shortcut);
+        tokens.forEach((token) => {
+          const kbd = document.createElement("kbd");
+          kbd.textContent = token;
+          keysEl.appendChild(kbd);
+        });
+      } else {
+        const unset = document.createElement("kbd");
+        unset.className = "shortcut-unset";
+        unset.textContent = "not set";
+        keysEl.appendChild(unset);
+      }
+
+      li.appendChild(labelEl);
+      li.appendChild(keysEl);
+      shortcutsListEl.appendChild(li);
+    }
+  } catch (err) {
+    // Fallback: show a simple note
     const li = document.createElement("li");
-
-    const labelEl = document.createElement("span");
-    labelEl.textContent = label;
-
-    const keysEl = document.createElement("span");
-    keysEl.className = "shortcut-keys";
-    keys.forEach((k, i) => {
-      const kbd = document.createElement("kbd");
-      kbd.textContent = k;
-      keysEl.appendChild(kbd);
-    });
-
-    li.appendChild(labelEl);
-    li.appendChild(keysEl);
+    li.textContent = "Open chrome://extensions/shortcuts to view bindings.";
     shortcutsListEl.appendChild(li);
   }
 }
-renderShortcutsList();
+
+loadDynamicShortcuts();
 
 // Mirrors background.js's getLeastUsedProfileId(): quick-switch-1 targets
 // whichever saved account has the most 5-hour ("session") credit left —
@@ -95,9 +147,37 @@ function findQuickSwitchTargetId(profiles) {
 const RESUME_PROMPT =
   "I'm continuing a previous Claude conversation. I've attached the full transcript and files — please read them for context, then continue helping me from where we left off without summarizing the past dialogue.";
 
-function sendMessage(message) {
+function sendMessage(message, timeoutMs = 15000) {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage(message, (response) => resolve(response));
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve({
+          ok: false,
+          error: "Background service worker timed out. Please reload the extension in chrome://extensions.",
+        });
+      }
+    }, timeoutMs);
+
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (settled) return;
+        clearTimeout(timer);
+        settled = true;
+        if (chrome.runtime.lastError) {
+          resolve({ ok: false, error: chrome.runtime.lastError.message });
+        } else {
+          resolve(response || { ok: false, error: "Empty response from background service worker." });
+        }
+      });
+    } catch (err) {
+      if (!settled) {
+        clearTimeout(timer);
+        settled = true;
+        resolve({ ok: false, error: err.message || String(err) });
+      }
+    }
   });
 }
 
@@ -148,7 +228,7 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
   if (!isCurrent && isQuickSwitchTarget) {
     const bestBadge = document.createElement("span");
     bestBadge.className = "best-badge";
-    bestBadge.title = `${MOD_KEY}+${SHIFT_KEY}+1 — switch here, it has the most usage left`;
+    bestBadge.title = `${IS_MAC ? "⌥⇧1" : "Alt+Shift+1"} — switch here, it has the most usage left`;
     bestBadge.textContent = "🔋";
     main.appendChild(bestBadge);
   }
@@ -273,6 +353,15 @@ function renderProfiles(profiles, activeId, query = "") {
           (profile.email || "").toLowerCase().includes(q)
       )
     : saved;
+
+  const totalAccounts = entries.length;
+  const showSeparation = totalAccounts >= 2;
+  if (searchSectionEl) {
+    searchSectionEl.classList.toggle("panel-last", !showSeparation);
+  }
+  if (savedAccountsSectionEl) {
+    savedAccountsSectionEl.classList.toggle("hidden", totalAccounts === 1 && saved.length === 0 && !q);
+  }
 
   emptyEl.classList.toggle("hidden", entries.length > 0);
   savedEyebrowEl.classList.toggle("hidden", saved.length === 0);
@@ -614,46 +703,213 @@ async function handleRemove(profile) {
   await loadProfiles();
 }
 
-// Reads the current claude.ai tab's rendered conversation and saves it as
-// a Markdown file. No Claude API calls happen here — this only touches the
-// page DOM and the filesystem, so it costs zero tokens/credits.
-async function handleExport() {
-  exportBtn.disabled = true;
-  showStatus("Reading the conversation and thoughts on this tab…");
-  const res = await sendMessage({ type: "EXPORT_CHAT" });
-  exportBtn.disabled = false;
-  if (!res?.ok) {
-    showStatus(res?.error || "Could not export this chat.", "error");
-    return;
-  }
-  const attachmentNote =
-    res.attachmentsSaved || res.attachmentsFailed
-      ? ` (${res.attachmentsSaved} attachment(s) saved${res.attachmentsFailed ? `, ${res.attachmentsFailed} failed` : ""})`
-      : "";
-  showStatus(
-    `Exported "${res.title}" (${res.messageCount} turns) as "${res.filename}".${attachmentNote}`,
-    "success"
-  );
-  copyPromptBtn.classList.remove("hidden");
+// ---------- Theme Management ----------
+const THEMES = ["midnight", "claude-light", "claude-dark"];
+
+async function applyTheme(themeName) {
+  const valid = THEMES.includes(themeName) ? themeName : "midnight";
+  document.documentElement.setAttribute("data-theme", valid);
+  try {
+    localStorage.setItem("hotswap_theme", valid);
+  } catch (e) {}
+  await chrome.storage.local.set({ theme: valid });
+
+  themeCards.forEach((card) => {
+    const isActive = card.dataset.theme === valid;
+    card.classList.toggle("active", isActive);
+    card.setAttribute("aria-checked", String(isActive));
+  });
 }
 
-async function handleCopyPrompt() {
+async function initTheme() {
+  let active = "midnight";
   try {
-    await navigator.clipboard.writeText(RESUME_PROMPT);
-    showStatus("Resume prompt copied — paste it alongside the attached file.", "success");
+    const stored = await chrome.storage.local.get("theme");
+    active = stored.theme || localStorage.getItem("hotswap_theme") || "midnight";
+  } catch (e) {}
+  await applyTheme(active);
+}
+
+function handleQuickThemeToggle() {
+  const current = document.documentElement.getAttribute("data-theme") || "midnight";
+  const currentIndex = THEMES.indexOf(current);
+  const nextTheme = THEMES[(currentIndex + 1) % THEMES.length];
+  applyTheme(nextTheme);
+  showStatus(`Theme switched to ${nextTheme.replace("-", " ")}.`, "info");
+}
+
+themeCards.forEach((card) => {
+  card.addEventListener("click", () => {
+    const target = card.dataset.theme;
+    if (target) applyTheme(target);
+  });
+});
+
+if (themeQuickToggle) {
+  themeQuickToggle.addEventListener("click", handleQuickThemeToggle);
+}
+
+initTheme();
+
+// ---------- Checkbox Persistence ----------
+// Load saved checkbox states on popup open; save on every change.
+async function loadCheckboxPrefs() {
+  const stored = await chrome.storage.local.get([
+    "pref_includeAttachments",
+    "pref_includeSummaryContent",
+  ]);
+  if (optIncludeAttachments) {
+    optIncludeAttachments.checked = stored.pref_includeAttachments !== false;
+  }
+  if (optIncludeSummaryContent) {
+    optIncludeSummaryContent.checked = stored.pref_includeSummaryContent !== false;
+  }
+}
+
+if (optIncludeAttachments) {
+  optIncludeAttachments.addEventListener("change", () => {
+    chrome.storage.local.set({ pref_includeAttachments: optIncludeAttachments.checked });
+  });
+}
+if (optIncludeSummaryContent) {
+  optIncludeSummaryContent.addEventListener("change", () => {
+    chrome.storage.local.set({ pref_includeSummaryContent: optIncludeSummaryContent.checked });
+  });
+}
+loadCheckboxPrefs();
+
+// ---------- Gemini Key Status ----------
+// Shows a status chip under the Summarize button in the Tools tab.
+async function refreshGeminiKeyStatus() {
+  if (!geminiKeyStatus) return;
+  const stored = await chrome.storage.local.get("geminiApiKey");
+  const hasKey = !!(stored.geminiApiKey || "").trim();
+  geminiKeyStatus.className = "gemini-key-chip";
+  if (hasKey) {
+    geminiKeyStatus.textContent = "✅ Gemini API key set";
+    geminiKeyStatus.classList.add("gemini-key-ok");
+    geminiKeyStatus.classList.remove("hidden");
+  } else {
+    geminiKeyStatus.textContent = "⚠️ Add your Gemini API key in Settings to use this feature.";
+    geminiKeyStatus.classList.add("gemini-key-missing");
+    geminiKeyStatus.classList.remove("hidden");
+  }
+}
+refreshGeminiKeyStatus();
+
+// ---------- Exporter & Gemini Summarizer ----------
+
+let currentSummaryText = null;
+
+async function copyToClipboard(text, buttonEl, successText = "✓ Copied!") {
+  if (!text) return;
+  const originalText = buttonEl ? buttonEl.textContent : "";
+  try {
+    await navigator.clipboard.writeText(text);
+    if (buttonEl) {
+      buttonEl.textContent = successText;
+      setTimeout(() => { buttonEl.textContent = originalText; }, 2000);
+    }
+    showStatus("Copied to clipboard!", "success");
   } catch (err) {
-    // Clipboard API can be flaky in extension popups depending on focus
-    // timing; fall back to the older execCommand approach.
     const textarea = document.createElement("textarea");
-    textarea.value = RESUME_PROMPT;
+    textarea.value = text;
     textarea.style.position = "fixed";
     textarea.style.opacity = "0";
     document.body.appendChild(textarea);
     textarea.select();
     document.execCommand("copy");
     textarea.remove();
-    showStatus("Resume prompt copied — paste it alongside the attached file.", "success");
+    if (buttonEl) {
+      buttonEl.textContent = successText;
+      setTimeout(() => { buttonEl.textContent = originalText; }, 2000);
+    }
+    showStatus("Copied to clipboard!", "success");
   }
+}
+
+async function handleExportRaw() {
+  if (!exportRawBtn || exportRawBtn.disabled) return;
+  exportRawBtn.disabled = true;
+  showStatus("Backing up conversation & attachments…");
+  const options = {
+    includeAttachments: optIncludeAttachments ? optIncludeAttachments.checked : true,
+  };
+  const res = await sendMessage({ type: "EXPORT_CHAT", options });
+  exportRawBtn.disabled = false;
+  if (!res?.ok) {
+    showStatus(res?.error || "Could not export this chat.", "error");
+    return;
+  }
+  const attachmentNote =
+    res.attachmentsSaved || res.attachmentsFailed
+      ? ` (${res.attachmentsSaved} file(s) saved${res.attachmentsFailed ? `, ${res.attachmentsFailed} failed` : ""})`
+      : "";
+  showStatus(
+    `Exported "${res.title}" (${res.messageCount} turns) — saved to Downloads/${res.filename}.${attachmentNote}`,
+    "success"
+  );
+}
+
+async function handleSummarize() {
+  if (!summarizeBtn || summarizeBtn.disabled) return;
+  const originalText = summarizeBtn.textContent;
+  summarizeBtn.disabled = true;
+  summarizeBtn.textContent = "⏳ Summarizing with Gemini…";
+  showStatus("✨ Asking Gemini to summarize conversation…");
+
+  const options = {
+    includeFileContent: optIncludeSummaryContent ? optIncludeSummaryContent.checked : true,
+  };
+  const res = await sendMessage({ type: "SUMMARIZE_CHAT", options });
+
+  if (!res?.ok) {
+    summarizeBtn.disabled = false;
+    summarizeBtn.textContent = originalText;
+    if (res?.error === "NO_API_KEY") {
+      showStatus("No Gemini API key set — add one in the Settings tab.", "error");
+    } else {
+      showStatus(res?.error || "Could not generate summary.", "error");
+    }
+    return;
+  }
+
+  currentSummaryText = res.summaryText;
+
+  // Populate Summary Hub
+  if (summaryHub) {
+    if (summaryHubTitle) summaryHubTitle.textContent = res.title || "Claude Conversation";
+    if (summaryHubMetrics) summaryHubMetrics.textContent = `${res.messageCount} turns • Gemini AI summary`;
+    if (summaryPreviewContent) summaryPreviewContent.textContent = res.summaryText || "";
+    summaryHub.classList.remove("hidden");
+  }
+
+  // Auto-copy to clipboard and provide clear user feedback
+  await copyToClipboard(res.summaryText, copySummaryBtn, "✓ Copied!");
+
+  summarizeBtn.disabled = false;
+  summarizeBtn.textContent = "✓ Summary Copied to Clipboard!";
+  setTimeout(() => {
+    summarizeBtn.textContent = originalText;
+  }, 3000);
+
+  showStatus(`✓ Summary for "${res.title}" copied to clipboard!`, "success");
+}
+
+function handleCopySummary() {
+  if (currentSummaryText) {
+    copyToClipboard(currentSummaryText, copySummaryBtn, "✓ Copied!");
+  } else {
+    showStatus("No summary yet. Click 'Summarize' on a claude.ai chat tab first.", "error");
+  }
+}
+
+function handleToggleSummaryPreview() {
+  if (!summaryPreviewDrawer) return;
+  const isHidden = summaryPreviewDrawer.classList.contains("hidden");
+  summaryPreviewDrawer.classList.toggle("hidden", !isHidden);
+  const arrow = togglePreviewBtn.querySelector(".preview-arrow");
+  if (arrow) arrow.textContent = isHidden ? "▴" : "▾";
 }
 
 // Downloads a JSON file containing every saved profile's cookies. This is
@@ -711,8 +967,10 @@ async function handleRestoreFileSelected() {
 refreshAllBtn.addEventListener("click", handleRefreshAll);
 addBtn.addEventListener("click", handleAdd);
 newAccountBtn.addEventListener("click", handleNewAccount);
-exportBtn.addEventListener("click", handleExport);
-copyPromptBtn.addEventListener("click", handleCopyPrompt);
+if (exportRawBtn) exportRawBtn.addEventListener("click", handleExportRaw);
+if (summarizeBtn) summarizeBtn.addEventListener("click", handleSummarize);
+if (copySummaryBtn) copySummaryBtn.addEventListener("click", handleCopySummary);
+if (togglePreviewBtn) togglePreviewBtn.addEventListener("click", handleToggleSummaryPreview);
 backupBtn.addEventListener("click", handleBackup);
 restoreBtn.addEventListener("click", handleRestoreClick);
 restoreFileInput.addEventListener("change", handleRestoreFileSelected);
@@ -747,6 +1005,8 @@ tabButtons.forEach((btn) => {
     tabPanels.forEach((panel) => {
       panel.classList.toggle("hidden", panel.dataset.tab !== target);
     });
+    // Reload dynamic shortcuts when Settings tab is opened
+    if (target === "settings") loadDynamicShortcuts();
   });
 });
 
@@ -807,95 +1067,52 @@ refreshSessionsBtn.addEventListener("click", handleRefreshSessions);
 
 loadAutoRefreshSettings();
 
-// ---------- Export directory setting ----------
-const exportParentInput = document.getElementById("export-parent-input");
-const browseFolderBtn = document.getElementById("browse-folder-btn");
-const resetFolderBtn = document.getElementById("reset-folder-btn");
-const exportPreviewPath = document.getElementById("export-preview-path");
-
-const DEFAULT_EXPORT_FOLDER = "HotSwap-Claude-Exports";
-
-function normalizeExportPath(raw) {
-  if (!raw) return DEFAULT_EXPORT_FOLDER;
-  let cleaned = raw.trim().replace(/\\+/g, "/");
-
-  // If user pasted a full absolute path, extract the part inside Downloads
-  const dlMatch = cleaned.match(/(?:^|\/|\\)Downloads\/(.+)$/i);
-  if (dlMatch && dlMatch[1]) {
-    cleaned = dlMatch[1];
-  } else {
-    // Strip drive letters, leading/trailing slashes, and ../ traversals
-    cleaned = cleaned.replace(/^[a-zA-Z]:\/?/, "").replace(/^[\/.]+/, "").replace(/[\/.]+$/, "");
-  }
-
-  cleaned = cleaned.replace(/\/{2,}/g, "/").trim();
-  return cleaned || DEFAULT_EXPORT_FOLDER;
-}
-
-function updateExportPreview(folderName) {
-  if (!exportPreviewPath) return;
-  const safe = folderName || DEFAULT_EXPORT_FOLDER;
-  exportPreviewPath.textContent = "Target: ";
-  const codeEl = document.createElement("code");
-  codeEl.textContent = `Downloads/${safe}/<ChatTitle>_<Date>_<ID>.zip`;
-  exportPreviewPath.appendChild(codeEl);
-}
-
-async function loadExportFolderSetting() {
-  if (!exportParentInput) return;
-  const stored = await chrome.storage.local.get("exportParentFolder");
-  const folder = stored.exportParentFolder || DEFAULT_EXPORT_FOLDER;
-  exportParentInput.value = folder;
-  updateExportPreview(folder);
-}
-
-if (exportParentInput) {
-  exportParentInput.addEventListener("input", () => {
-    const val = normalizeExportPath(exportParentInput.value);
-    updateExportPreview(val);
-  });
-
-  exportParentInput.addEventListener("change", async () => {
-    const val = normalizeExportPath(exportParentInput.value);
-    exportParentInput.value = val;
-    await chrome.storage.local.set({ exportParentFolder: val });
-    updateExportPreview(val);
-    showStatus(`Export folder set to "Downloads/${val}/".`, "success");
-  });
-}
-
-if (browseFolderBtn) {
-  browseFolderBtn.addEventListener("click", async () => {
-    try {
-      if (typeof window.showDirectoryPicker === "function") {
-        const dirHandle = await window.showDirectoryPicker({ mode: "read" });
-        if (dirHandle && dirHandle.name) {
-          const folderName = normalizeExportPath(dirHandle.name);
-          exportParentInput.value = folderName;
-          await chrome.storage.local.set({ exportParentFolder: folderName });
-          updateExportPreview(folderName);
-          showStatus(`Export folder set to "Downloads/${folderName}/".`, "success");
-        }
-      } else {
-        exportParentInput.focus();
-        showStatus("Type or paste your desired folder path below.", "info");
-      }
-    } catch (err) {
-      if (err.name !== "AbortError") {
-        exportParentInput.focus();
-      }
+// ---------- Gemini API Key Management ----------
+async function loadGeminiKeySettings() {
+  if (!geminiApiKeyInput) return;
+  const stored = await chrome.storage.local.get("geminiApiKey");
+  const key = (stored.geminiApiKey || "").trim();
+  geminiApiKeyInput.value = key ? "••••••••••••••••" : "";
+  if (geminiKeySettingsStatus) {
+    if (key) {
+      geminiKeySettingsStatus.textContent = "✅ API key is set.";
+    } else {
+      geminiKeySettingsStatus.textContent = "No API key saved yet.";
     }
+  }
+}
+
+if (saveGeminiKeyBtn) {
+  saveGeminiKeyBtn.addEventListener("click", async () => {
+    if (!geminiApiKeyInput) return;
+    const raw = geminiApiKeyInput.value.trim();
+    if (!raw || raw === "••••••••••••••••") {
+      showStatus("Paste a new API key first.", "error");
+      return;
+    }
+    await chrome.storage.local.set({ geminiApiKey: raw });
+    await loadGeminiKeySettings();
+    await refreshGeminiKeyStatus();
+    showStatus("Gemini API key saved.", "success");
   });
 }
 
-if (resetFolderBtn) {
-  resetFolderBtn.addEventListener("click", async () => {
-    exportParentInput.value = DEFAULT_EXPORT_FOLDER;
-    await chrome.storage.local.set({ exportParentFolder: DEFAULT_EXPORT_FOLDER });
-    updateExportPreview(DEFAULT_EXPORT_FOLDER);
-    showStatus(`Export folder reset to "Downloads/${DEFAULT_EXPORT_FOLDER}/".`, "success");
+if (clearGeminiKeyBtn) {
+  clearGeminiKeyBtn.addEventListener("click", async () => {
+    await chrome.storage.local.remove("geminiApiKey");
+    if (geminiApiKeyInput) geminiApiKeyInput.value = "";
+    await loadGeminiKeySettings();
+    await refreshGeminiKeyStatus();
+    showStatus("Gemini API key cleared.", "success");
   });
 }
 
-loadExportFolderSetting();
+if (geminiLink) {
+  geminiLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: "https://ai.google.dev/gemini-api/docs/api-key" });
+  });
+}
+
+loadGeminiKeySettings();
 
