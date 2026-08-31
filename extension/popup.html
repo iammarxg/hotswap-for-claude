@@ -10,13 +10,22 @@
     <header class="header">
       <span class="header-dot" aria-hidden="true"></span>
       <span class="header-title">HotSwap</span>
-      <button
-        id="refresh-all-btn"
-        class="icon-btn header-refresh-all"
-        type="button"
-        title="Refresh usage for all accounts"
-        aria-label="Refresh usage for all accounts"
-      >↻</button>
+      <div class="header-actions">
+        <button
+          id="theme-quick-toggle"
+          class="icon-btn header-theme-toggle"
+          type="button"
+          title="Cycle Theme (Midnight, Claude Light, Claude Dark)"
+          aria-label="Cycle Theme"
+        >◐</button>
+        <button
+          id="refresh-all-btn"
+          class="icon-btn header-refresh-all"
+          type="button"
+          title="Refresh usage for all accounts"
+          aria-label="Refresh usage for all accounts"
+        >↻</button>
+      </div>
       <span id="version-tag" class="header-version"></span>
     </header>
 
@@ -63,7 +72,7 @@
         </ul>
       </section>
 
-      <section class="panel panel-tight">
+      <section id="search-section" class="panel panel-tight">
         <div class="search-row">
           <input
             id="account-search"
@@ -108,7 +117,7 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section id="saved-accounts-section" class="panel">
         <p id="saved-eyebrow" class="eyebrow hidden">Saved accounts</p>
         <ul id="profile-list" class="profile-list"></ul>
 
@@ -123,23 +132,100 @@
 
     <div id="tab-panel-tools" class="tab-panel hidden" data-tab="tools" role="tabpanel">
       <section class="panel panel-last">
-        <h2 class="eyebrow">Resume elsewhere</h2>
+        <h2 class="eyebrow">Export &amp; Summarize</h2>
         <div class="panel-body">
-          <p class="hint">
-            Exports this conversation to Markdown — reads the page only, no
-            API calls, no tokens spent.
-          </p>
-          <div class="btn-row">
-            <button id="export-btn" class="btn btn-primary">Export this chat</button>
-            <button id="copy-prompt-btn" class="btn btn-ghost hidden">
-              Copy resume prompt
+
+          <!-- ── Export Raw Chat ── -->
+          <div class="export-block">
+            <p class="export-block-title">📄 Export Chat</p>
+            <p class="hint">Downloads a full ZIP with the conversation transcript and, optionally, real attached files.</p>
+            <label class="checkbox-label" for="opt-include-attachments">
+              <input id="opt-include-attachments" type="checkbox" checked />
+              <span>Download &amp; save real files (.png, .py) in ZIP</span>
+            </label>
+            <button id="export-raw-btn" class="btn btn-ghost" type="button">
+              📄 Export Chat
             </button>
           </div>
+
+          <!-- ── Summarize ── -->
+          <div class="export-block">
+            <p class="export-block-title">📋 Summarize Chat</p>
+            <p class="hint">Uses Gemini AI to read the conversation and copy a smart summary to your clipboard. No file download.</p>
+            <label class="checkbox-label" for="opt-include-summary-content">
+              <input id="opt-include-summary-content" type="checkbox" checked />
+              <span>Include file &amp; code content in summary</span>
+            </label>
+            <button id="summarize-btn" class="btn btn-primary" type="button">
+              📋 Summarize &amp; Copy
+            </button>
+            <div id="gemini-key-status" class="gemini-key-chip hidden"></div>
+          </div>
+
+          <!-- Summary Hub (shown after successful summarize) -->
+          <div id="summary-hub" class="summary-hub hidden">
+            <div class="summary-hub-header">
+              <span class="summary-hub-badge">📋 Summary Ready</span>
+              <span id="summary-hub-title" class="summary-hub-title"></span>
+            </div>
+            <p id="summary-hub-metrics" class="summary-hub-metrics"></p>
+            <div class="btn-row summary-hub-actions">
+              <button id="copy-summary-btn" class="btn btn-primary btn-sm" type="button">
+                📋 Copy Summary
+              </button>
+            </div>
+            <button id="toggle-preview-btn" class="preview-toggle-btn" type="button">
+              <span>Preview summary</span>
+              <span class="preview-arrow" aria-hidden="true">▾</span>
+            </button>
+            <div id="summary-preview-drawer" class="summary-preview-drawer hidden">
+              <pre id="summary-preview-content" class="summary-preview-content"></pre>
+            </div>
+          </div>
+
         </div>
       </section>
     </div>
 
     <div id="tab-panel-settings" class="tab-panel hidden" data-tab="settings" role="tabpanel">
+      <section class="panel">
+        <h2 class="eyebrow">Theme &amp; Appearance</h2>
+        <div class="panel-body">
+          <p class="hint">Choose your preferred visual palette.</p>
+          <div class="theme-selector-grid" role="radiogroup" aria-label="Theme Selection">
+            <button class="theme-card active" type="button" data-theme="midnight" role="radio" aria-checked="true">
+              <div class="theme-card-preview theme-preview-midnight">
+                <span class="theme-dot dot-canvas"></span>
+                <span class="theme-dot dot-surface"></span>
+                <span class="theme-dot dot-accent"></span>
+              </div>
+              <span class="theme-card-name">Midnight</span>
+              <span class="theme-card-tag">Default</span>
+            </button>
+
+            <button class="theme-card" type="button" data-theme="claude-light" role="radio" aria-checked="false">
+              <div class="theme-card-preview theme-preview-claude-light">
+                <span class="theme-dot dot-canvas"></span>
+                <span class="theme-dot dot-surface"></span>
+                <span class="theme-dot dot-accent"></span>
+              </div>
+              <span class="theme-card-name">Claude Light</span>
+              <span class="theme-card-tag">Native</span>
+            </button>
+
+            <button class="theme-card" type="button" data-theme="claude-dark" role="radio" aria-checked="false">
+              <div class="theme-card-preview theme-preview-claude-dark">
+                <span class="theme-dot dot-canvas"></span>
+                <span class="theme-dot dot-surface"></span>
+                <span class="theme-dot dot-accent"></span>
+              </div>
+              <span class="theme-card-name">Claude Dark</span>
+              <span class="theme-card-tag">Warm</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
       <section class="panel">
         <h2 class="eyebrow">Session keep-alive</h2>
         <div class="panel-body">
@@ -169,34 +255,42 @@
       </section>
 
       <section class="panel">
-        <h2 class="eyebrow">Export directory</h2>
+        <h2 class="eyebrow">🤖 AI Summarizer</h2>
         <div class="panel-body">
           <p class="hint">
-            Location where chat exports &amp; attachments will be saved.
+            Your Gemini API key is used locally to generate conversation summaries.
+            It never leaves your browser — sent only to Google's Gemini API.
           </p>
-          <div class="folder-picker-group">
-            <div class="folder-input-wrapper">
-              <span class="folder-prefix-tag">Downloads /</span>
-              <input
-                id="export-parent-input"
-                type="text"
-                class="folder-input"
-                placeholder="HotSwap-Claude-Exports"
-                value="HotSwap-Claude-Exports"
-                spellcheck="false"
-              />
-            </div>
-            <div class="folder-btn-row">
-              <button id="browse-folder-btn" class="btn btn-ghost btn-sm" type="button" title="Choose a folder using system picker">
-                📁 Choose folder…
-              </button>
-              <button id="reset-folder-btn" class="btn btn-ghost btn-sm" type="button" title="Reset to default">
-                Reset
-              </button>
-            </div>
+          <div class="gemini-key-row">
+            <input
+              id="gemini-api-key-input"
+              type="password"
+              class="folder-input"
+              placeholder="Paste your Gemini API key here…"
+              spellcheck="false"
+              autocomplete="off"
+            />
           </div>
-          <p id="export-preview-path" class="export-preview-path">
-            Target: <code>Downloads/HotSwap-Claude-Exports/</code>
+          <div class="folder-btn-row">
+            <button id="save-gemini-key-btn" class="btn btn-primary btn-sm" type="button">Save key</button>
+            <button id="clear-gemini-key-btn" class="btn btn-ghost btn-sm" type="button">Clear key</button>
+          </div>
+          <p id="gemini-key-settings-status" class="export-preview-path"></p>
+          <p class="hint" style="margin-top:6px">
+            🔗 Get a free key at
+            <a id="gemini-link" href="#" class="settings-link">ai.google.dev</a>
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="eyebrow">Export save location</h2>
+        <div class="panel-body">
+          <p class="hint">
+            Chat backup archives are saved to your browser's default downloads directory:
+          </p>
+          <p class="export-preview-path">
+            <code>Downloads/HotSwap-Claude-Exports/</code>
           </p>
         </div>
       </section>

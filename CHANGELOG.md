@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.1.0] - 2026-08-31
+
+### 🎨 Unified Theme Engine, Universal Gemini AI Summarizer & Lossless Chat Bundler
+
+#### 🎨 Unified Theme Engine (3 Curated Palettes)
+- **Midnight (Signature Default)**: High-contrast slate/obsidian palette (`#0d1117` / `#161b22`) with electric cyan & sapphire accents (`#58a6ff`).
+- **Claude Light**: Authentic Claude.ai light mode aesthetic (`#FAF9F5` / `#FFFFFF`) with warm terracotta/clay accents (`#D97757`).
+- **Claude Dark**: Authentic Claude.ai dark mode aesthetic (`#1F1E1D` / `#2B2A27`) with warm clay highlights.
+- **Zero-Flash Bootstrap**: Synchronous pre-render theme bootstrap applying CSS custom variables instantly with 0ms FOUT.
+- **Header Theme Toggle**: 1-click quick theme cycling button directly in the popup header.
+- **Visual Theme Selector**: Settings tab features interactive theme cards with live color swatch indicators.
+- **Typography Overhaul**: Standardized system font stack with aligned font-weight hierarchy (`600` titles, `500` labels, `400` body).
+
+#### 🤖 Universal Gemini AI Context Handoff Summarizer
+- **Native Gemini Integration**: Direct client-to-API summarization powered by Google's `gemini-3.5-flash-lite`.
+- **Domain-Agnostic Context Handoff**: Generates high-density markdown briefs for any topic (coding, research, writing, business) structured to let a brand-new account resume work seamlessly:
+  - 🎯 Core Objective & Topic
+  - 📌 Context, Tools & Key References
+  - 🚫 User Preferences, Constraints & Exclusions (including things the user explicitly does **NOT** want)
+  - 💡 Key Decisions & Discoveries
+  - 📦 What Was Produced / Accomplished
+  - ⏭️ Current State & Next Steps (Handoff)
+- **Zero File Download Overhead**: Summary extraction runs purely in memory (`skipDownloads: true`), leaving your system files untouched and copying markdown output straight to clipboard.
+- **File & Code Content Option**: Optional inclusion of attached file and code artifact contents (capped at 30,000 chars) into the Gemini context window.
+- **Local API Key Security**: User enters their own Gemini API key in Settings; stored securely in `chrome.storage.local` with zero telemetry.
+- **Summary Hub & Preview Drawer**: Instant post-summarization hub with 1-click clipboard copy and collapsible markdown preview.
+
+#### 📦 Lossless Chat Bundler & Workflow Enhancements
+- **Separated Tool Suite**: `📄 Export Chat` (full offline ZIP backup) and `📋 Summarize Chat` (clipboard text summary) clearly distinguished.
+- **Lossless In-Memory ZIP Bundler (`zip-builder.js`)**: Traverses virtualized chat DOM without truncation, auto-expands Claude 3.7 / extended thinking streams, and packages artifacts into a single `.zip` file with zero third-party dependencies.
+- **Informative Settings UI**: Non-interactive save path display indicating the default destination (`Downloads/HotSwap-Claude-Exports/`).
+- **Dynamic Shortcut Display**: Settings tab queries `chrome.commands.getAll()` live to render user's actual browser-configured keybindings.
+- **Preference Persistence**: Checkbox toggles remember their state across popup sessions.
+- **Hardened UI Message Bus**: Added timeout guards and `chrome.runtime.lastError` handling to prevent popup freezing.
+
+---
+
 ## [v1.0.1] - 2026-08-23
 
 ### 🚨 Emergency Fix: Free Plan Usage Tracking
