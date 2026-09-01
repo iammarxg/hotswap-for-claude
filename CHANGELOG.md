@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+---
+
+## [v1.1.1] - 2026-09-01
+
+### 🐛 Bug Fix: Popup Progress Bar (Accounts Tab)
+- Fixed progress bar in popup usage details that was broken after the v1.1.0 UI redesign.
+- The `.usage-bar-track` and `.usage-bar-fill` elements were created as `<span>` tags, which are inline by default and don't respect `width: 100%` or `flex: 1`. Added explicit `display: block` to both elements.
+- Updated `.usage-detail-row` to use `flex-direction: column` so the label row and the progress bar track stack vertically with the bar spanning full width.
+- Fixed heat color classes — `.usage-bar-fill.cool` selectors didn't match because the JS generates `usage-cool` (with the prefix), so the fill rendered without any color.
+- Added proper spacing between the label and percentage using `gap: 8px` on the flex container and non-breaking spaces around the `·` separator.
+- Progress bar now correctly displays usage percentage for the current account in the Accounts tab.
+
+---
+
 ## [v1.1.0] - 2026-08-31
 
 ### 🎨 Unified Theme Engine, Universal Gemini AI Summarizer & Lossless Chat Bundler

@@ -485,7 +485,7 @@ function buildUsageDetail(usage) {
 
     const pct = document.createElement("span");
     pct.className = `usage-detail-pct ${heat}`;
-    pct.textContent = `${v.percentage.toFixed(0)}%${resetText ? ` · ${resetText}` : ""}`;
+    pct.textContent = `${v.percentage.toFixed(0)}%${resetText ? ` · ${resetText}` : ""}`;
 
     top.appendChild(label);
     top.appendChild(pct);
