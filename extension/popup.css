@@ -565,55 +565,74 @@ body {
 .usage-detail-row,
 .usage-compact-row {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
 }
 
 .usage-detail-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   font-size: 11px;
 }
 
 .usage-label {
   color: var(--text-dim);
   font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.usage-pct {
+.usage-pct,
+.usage-detail-pct {
   font-family: var(--mono);
   font-weight: 600;
   font-size: 11px;
+  white-space: nowrap;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.usage-detail-pct.usage-cool,
+.usage-detail-pct.usage-warm,
+.usage-detail-pct.usage-hot {
+  font-weight: 600;
 }
 
 .usage-bar-track {
+  display: block;
+  width: 100%;
   height: 5px;
   background: var(--surface-raised);
   border-radius: 3px;
   overflow: hidden;
-  display: flex;
+  position: relative;
 }
 
 .usage-bar-fill {
+  display: block;
   height: 100%;
+  width: 0;
   border-radius: 3px;
   transition: width 0.3s ease;
 }
 
-.usage-bar-fill.cool,
+.usage-bar-fill.usage-cool,
 .usage-chip.cool {
   background: var(--success);
   color: #fff;
 }
 
-.usage-bar-fill.warm,
+.usage-bar-fill.usage-warm,
 .usage-chip.warm {
   background: var(--warn-text);
   color: #000;
 }
 
-.usage-bar-fill.hot,
+.usage-bar-fill.usage-hot,
 .usage-chip.hot {
   background: var(--danger);
   color: #fff;
