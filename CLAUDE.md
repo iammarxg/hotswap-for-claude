@@ -49,6 +49,15 @@ The extension operates across 4 execution realms with strict security boundaries
 - **Feature/Bug Changes**: Document all changes in CHANGELOG.md using maximum 1-3 sentences per item (concise, actionable descriptions)
 - **Changelog Format**: Follow Keep a Changelog format with clear version headers and categorized sections (Added, Changed, Fixed, etc.)
 
+## Versioning Strategy (Semantic Versioning: x.y.z)
+HotSwap for Claude strictly follows [Semantic Versioning 2.0.0](https://semver.org/) (`MAJOR.MINOR.PATCH`):
+- **`x` = MAJOR (Breaking Changes & Generational Milestones)**: Storage schema migrations requiring incompatible data format changes, ground-up architectural rewrites (e.g. MV3 to MV4), or major scope expansions (e.g. multi-provider support across Claude, ChatGPT, and Gemini).
+  *Examples*: `v1.0.0` (Initial launch), `v2.0.0` (Future multi-model expansion).
+- **`y` = MINOR (New Features & Substantial Additions)**: Adding brand-new user-facing features, tools, tabs, or substantial enhancements in a backwards-compatible manner where existing user settings and sessions remain intact.
+  *Examples*: `v1.1.0` (Unified Theme Engine, Universal Gemini AI Summarizer, Lossless ZIP Bundler).
+- **`z` = PATCH (Bug Fixes & Maintenance Polish)**: Backwards-compatible bug fixes, UI/CSS alignment corrections, DOM/API adaptations to Claude.ai layout changes, timeout hardening, and performance improvements.
+  *Examples*: `v1.0.1` (Free-plan usage stream parser fix), `v1.1.1` (Accounts tab progress bar layout fix), `v1.1.2` (Export chat attachment packaging & stray download suppression).
+
 ## Local vs Public Git
 This repository maintains a private monorepo with a clean public mirror for open-source distribution:
 - **Local/Private**: All files including `src/`, `scripts/`, `website/`, `store-assets/`, `MEMORY.md`, `ROADMAP.md` are kept in the private repository
