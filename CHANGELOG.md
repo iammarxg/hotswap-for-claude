@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.1.2] - 2026-09-03
+
+### 🐛 Bug Fixes & Stability
+- **Fixed Attachment Packaging**: Image and code attachments are now saved directly inside the `.zip` archive under `attachments/` alongside `transcript.md` instead of saving loose files.
+- **Suppressed Stray Downloads & Save Prompts**: Suppressed native browser "Save As" prompts and duplicate loose file downloads during export.
+- **Strict Checkbox Enforcement**: Unchecking "Download & save real files in ZIP" now strictly skips all file downloads.
+- **Eliminated Duplicate Downloads**: Fixed an issue where the same attachment was downloaded 3–5 times per turn.
+- **Fixed Background Worker Timeouts**: Added persistent keep-alive heartbeats to prevent extension timeouts during multi-file exports.
+
+---
+
 ## [v1.1.1] - 2026-09-01
 
 ### 🐛 Bug Fix: Popup Progress Bar (Accounts Tab)

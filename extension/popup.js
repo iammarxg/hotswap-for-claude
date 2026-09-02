@@ -147,7 +147,7 @@ function findQuickSwitchTargetId(profiles) {
 const RESUME_PROMPT =
   "I'm continuing a previous Claude conversation. I've attached the full transcript and files — please read them for context, then continue helping me from where we left off without summarizing the past dialogue.";
 
-function sendMessage(message, timeoutMs = 15000) {
+function sendMessage(message, timeoutMs = 30000) {
   return new Promise((resolve) => {
     let settled = false;
     const timer = setTimeout(() => {
@@ -831,24 +831,63 @@ async function copyToClipboard(text, buttonEl, successText = "✓ Copied!") {
 async function handleExportRaw() {
   if (!exportRawBtn || exportRawBtn.disabled) return;
   exportRawBtn.disabled = true;
-  showStatus("Backing up conversation & attachments…");
-  const options = {
-    includeAttachments: optIncludeAttachments ? optIncludeAttachments.checked : true,
-  };
-  const res = await sendMessage({ type: "EXPORT_CHAT", options });
-  exportRawBtn.disabled = false;
-  if (!res?.ok) {
-    showStatus(res?.error || "Could not export this chat.", "error");
-    return;
-  }
-  const attachmentNote =
-    res.attachmentsSaved || res.attachmentsFailed
-      ? ` (${res.attachmentsSaved} file(s) saved${res.attachmentsFailed ? `, ${res.attachmentsFailed} failed` : ""})`
-      : "";
+  const includeAttachments = optIncludeAttachments ? optIncludeAttachments.checked : true;
   showStatus(
-    `Exported "${res.title}" (${res.messageCount} turns) — saved to Downloads/${res.filename}.${attachmentNote}`,
-    "success"
+    includeAttachments
+      ? "Starting backup (transcript & attachments)…"
+      : "Exporting conversation transcript…"
   );
+  const options = {
+    includeAttachments,
+  };
+
+  try {
+    const port = chrome.runtime.connect({ name: "export-chat" });
+    const pingTimer = setInterval(() => {
+      try {
+        port.postMessage({ type: "PING" });
+      } catch (e) {
+        clearInterval(pingTimer);
+      }
+    }, 4000);
+
+    port.postMessage({ type: "START_EXPORT", options });
+
+    port.onMessage.addListener((msg) => {
+      if (msg.type === "PROGRESS") {
+        showStatus(msg.text || "Exporting conversation…");
+      } else if (msg.type === "DONE") {
+        clearInterval(pingTimer);
+        exportRawBtn.disabled = false;
+        const res = msg.info || {};
+        const attachmentNote =
+          includeAttachments && (res.attachmentsSaved || res.attachmentsFailed)
+            ? ` (${res.attachmentsSaved} file(s) saved${res.attachmentsFailed ? `, ${res.attachmentsFailed} failed` : ""})`
+            : "";
+        showStatus(
+          `Exported "${res.title}" (${res.messageCount} turns) — saved to Downloads/${res.filename}.${attachmentNote}`,
+          "success"
+        );
+        try { port.disconnect(); } catch (e) {}
+      } else if (msg.type === "ERROR") {
+        clearInterval(pingTimer);
+        exportRawBtn.disabled = false;
+        showStatus(msg.error || "Could not export this chat.", "error");
+        try { port.disconnect(); } catch (e) {}
+      }
+    });
+
+    port.onDisconnect.addListener(() => {
+      clearInterval(pingTimer);
+      exportRawBtn.disabled = false;
+      if (chrome.runtime.lastError) {
+        showStatus(chrome.runtime.lastError.message, "error");
+      }
+    });
+  } catch (err) {
+    exportRawBtn.disabled = false;
+    showStatus(err.message || String(err), "error");
+  }
 }
 
 async function handleSummarize() {

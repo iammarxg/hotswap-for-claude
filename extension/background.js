@@ -1063,13 +1063,44 @@ function buildMarkdownTranscript(data) {
 
 async function withCapturedDownloads(work) {
   const captured = [];
-  const onCreated = (item) => captured.push(item);
+  let allowedId = null;
+  const setAllowedId = (id) => {
+    allowedId = id;
+  };
+  const isZipBundle = (item) => {
+    if (!item) return false;
+    if (allowedId != null && (item.id === allowedId || item === allowedId)) return true;
+    const url = item.url || item.finalUrl || "";
+    const filename = item.filename || "";
+    if (filename.toLowerCase().endsWith(".zip") || filename.includes(DEFAULT_EXPORT_PARENT)) return true;
+    if (url.startsWith("data:application/zip") || url.startsWith("data:application/octet-stream")) return true;
+    return false;
+  };
+  const cancelAndErase = (id) => {
+    if (allowedId != null && id === allowedId) return;
+    try {
+      chrome.downloads.cancel(id, () => {
+        chrome.downloads.erase({ id }, () => {});
+      });
+    } catch (e) {}
+  };
+  const onCreated = (item) => {
+    if (isZipBundle(item)) return;
+    captured.push(item);
+    cancelAndErase(item.id);
+  };
   chrome.downloads.onCreated.addListener(onCreated);
   try {
-    const result = await work();
-    return { result, captured };
+    const result = await work(setAllowedId);
+    return result;
   } finally {
     chrome.downloads.onCreated.removeListener(onCreated);
+    // Final pass cleanup of any loose individual downloads
+    for (const item of captured) {
+      if (!isZipBundle(item)) {
+        cancelAndErase(item.id);
+      }
+    }
   }
 }
 
@@ -1125,7 +1156,7 @@ async function resolveNativeDownload(att, capturedDownloads, usedIds, exportFold
 }
 
 // Scrapes the conversation DOM and saves it locally as a single ZIP bundle. Zero tokens spent.
-async function exportActiveChat(options = {}) {
+async function exportActiveChat(options = {}, onProgress = () => {}) {
   const includeAttachments = options.includeAttachments !== false;
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -1135,140 +1166,157 @@ async function exportActiveChat(options = {}) {
     );
   }
 
-  const { result } = await withCapturedDownloads(() =>
-    chrome.scripting.executeScript({
+  return await withCapturedDownloads(async (setAllowedId) => {
+    onProgress("Scanning conversation turns & attachments…");
+
+    const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       world: "MAIN",
       func: exportClaudeConversationInPage,
-    })
-  );
-  const injectionResult = result?.[0]?.result;
+      args: [{ skipDownloads: !includeAttachments, includeAttachments }],
+    });
+    const injectionResult = result?.[0]?.result;
 
-  if (!injectionResult || !injectionResult.messages || injectionResult.messages.length === 0) {
-    throw new Error(
-      "No messages found on this page. Claude's page layout may have changed since this extension was built."
-    );
-  }
+    if (!injectionResult || !injectionResult.messages || injectionResult.messages.length === 0) {
+      throw new Error(
+        "No messages found on this page. Claude's page layout may have changed since this extension was built."
+      );
+    }
 
-  const parentFolder = DEFAULT_EXPORT_PARENT;
-  const chatSubfolder = formatExportFolderName(injectionResult.title, injectionResult.chatId);
-  const zipFilename = `${parentFolder}/${chatSubfolder}.zip`;
+    const parentFolder = DEFAULT_EXPORT_PARENT;
+    const chatSubfolder = formatExportFolderName(injectionResult.title, injectionResult.chatId);
+    const zipFilename = `${parentFolder}/${chatSubfolder}.zip`;
 
-  // Assign local relative paths for all attachments if enabled
-  let attachmentIndex = 0;
-  if (includeAttachments) {
-    for (const m of injectionResult.messages) {
-      for (const att of m.attachments || []) {
-        if (!att.url && !att.dataUrl && !att.pastedText) {
+    // Assign local relative paths for all attachments if enabled
+    let attachmentIndex = 0;
+    const filenameToLocalName = new Map();
+    if (includeAttachments) {
+      for (const m of injectionResult.messages) {
+        for (const att of m.attachments || []) {
+          if (!att.url && !att.dataUrl && !att.pastedText) {
+            att.localPath = null;
+            continue;
+          }
+          const cleanName = ensureExtension(
+            att.filename,
+            att.url,
+            att.pastedText ? "text" : att.type
+          );
+          let localName = filenameToLocalName.get(cleanName);
+          if (!localName) {
+            attachmentIndex++;
+            localName = `${String(attachmentIndex).padStart(2, "0")}-${cleanName}`;
+            filenameToLocalName.set(cleanName, localName);
+          }
+          att.localName = localName;
+          att.localPath = `attachments/${localName}`;
+        }
+      }
+    } else {
+      for (const m of injectionResult.messages) {
+        for (const att of m.attachments || []) {
           att.localPath = null;
-          continue;
         }
-        attachmentIndex++;
-        const localName = `${String(attachmentIndex).padStart(2, "0")}-${ensureExtension(
-          att.filename,
-          att.url,
-          att.pastedText ? "text" : att.type
-        )}`;
-        att.localName = localName;
-        att.localPath = `attachments/${localName}`;
       }
     }
-  } else {
-    for (const m of injectionResult.messages) {
-      for (const att of m.attachments || []) {
-        att.localPath = null;
-      }
-    }
-  }
 
-  // Build the in-memory ZIP bundle
-  const zip = new SimpleZip();
-  const markdown = buildMarkdownTranscript(injectionResult);
-  zip.addFile("transcript.md", markdown);
+    onProgress(`Harvested ${injectionResult.messages.length} message turns. Packaging ZIP archive…`);
 
-  // Add attachments (if enabled and deduplicated by entry path)
-  let attachmentsSaved = 0;
-  let attachmentsFailed = 0;
+    // Build the in-memory ZIP bundle
+    const zip = new SimpleZip();
+    const markdown = buildMarkdownTranscript(injectionResult);
+    zip.addFile("transcript.md", markdown);
 
-  if (includeAttachments) {
-    const addedZipEntries = new Set();
+    // Add attachments (if enabled and deduplicated by entry path)
+    let attachmentsSaved = 0;
+    let attachmentsFailed = 0;
 
-    for (const m of injectionResult.messages) {
-      for (const att of m.attachments || []) {
-        if (!att.localName) continue;
-        const entryPath = `attachments/${att.localName}`;
-        if (addedZipEntries.has(entryPath)) continue;
-        addedZipEntries.add(entryPath);
+    if (includeAttachments) {
+      const addedZipEntries = new Set();
 
-        if (att.dataUrl) {
-          try {
-            const base64Index = att.dataUrl.indexOf(",");
-            if (base64Index !== -1) {
-              const base64 = att.dataUrl.slice(base64Index + 1);
-              const binaryStr = atob(base64);
-              const bytes = new Uint8Array(binaryStr.length);
-              for (let i = 0; i < binaryStr.length; i++) {
-                bytes[i] = binaryStr.charCodeAt(i);
+      for (const m of injectionResult.messages) {
+        for (const att of m.attachments || []) {
+          if (!att.localName) continue;
+          const entryPath = `attachments/${att.localName}`;
+          if (addedZipEntries.has(entryPath)) continue;
+          addedZipEntries.add(entryPath);
+
+          if (att.dataUrl) {
+            try {
+              const base64Index = att.dataUrl.indexOf(",");
+              if (base64Index !== -1) {
+                const base64 = att.dataUrl.slice(base64Index + 1);
+                const binaryStr = atob(base64);
+                const bytes = new Uint8Array(binaryStr.length);
+                for (let i = 0; i < binaryStr.length; i++) {
+                  bytes[i] = binaryStr.charCodeAt(i);
+                }
+                zip.addFile(entryPath, bytes);
+                attachmentsSaved++;
+              } else {
+                att.localPath = null;
+                attachmentsFailed++;
               }
-              zip.addFile(entryPath, bytes);
-              attachmentsSaved++;
-            } else {
+            } catch (err) {
               att.localPath = null;
               attachmentsFailed++;
             }
-          } catch (err) {
-            att.localPath = null;
-            attachmentsFailed++;
-          }
-        } else if (att.pastedText) {
-          try {
-            zip.addFile(entryPath, att.pastedText);
-            attachmentsSaved++;
-          } catch (err) {
-            att.localPath = null;
-            attachmentsFailed++;
-          }
-        } else if (att.url) {
-          try {
-            const res = await fetch(att.url);
-            if (res.ok) {
-              const buffer = await res.arrayBuffer();
-              zip.addFile(entryPath, buffer);
+          } else if (att.pastedText) {
+            try {
+              zip.addFile(entryPath, att.pastedText);
               attachmentsSaved++;
-            } else {
+            } catch (err) {
               att.localPath = null;
               attachmentsFailed++;
             }
-          } catch (err) {
-            att.localPath = null;
-            attachmentsFailed++;
+          } else if (att.url) {
+            try {
+              const res = await fetch(att.url);
+              if (res.ok) {
+                const buffer = await res.arrayBuffer();
+                zip.addFile(entryPath, buffer);
+                attachmentsSaved++;
+              } else {
+                att.localPath = null;
+                attachmentsFailed++;
+              }
+            } catch (err) {
+              att.localPath = null;
+              attachmentsFailed++;
+            }
           }
         }
       }
     }
-  }
 
-  // Trigger one single download for the entire ZIP bundle
-  const zipDataUrl = zip.toDataUrl();
-  const downloadId = await chrome.downloads.download({
-    url: zipDataUrl,
-    filename: zipFilename,
-    saveAs: false,
+    onProgress("Saving ZIP archive to Downloads…");
+
+    // Trigger one single download for the entire ZIP bundle
+    const zipDataUrl = zip.toDataUrl();
+    const downloadId = await chrome.downloads.download({
+      url: zipDataUrl,
+      filename: zipFilename,
+      saveAs: false,
+    });
+    setAllowedId(downloadId);
+
+    const settled = await waitForDownloadSettled(downloadId);
+    if (!settled.ok) {
+      throw new Error(`The export zip bundle failed to save (${settled.error}).`);
+    }
+
+    // Cooldown window: catch and cancel any delayed async signing tasks from Claude (e.g. h(Ij))
+    await new Promise((r) => setTimeout(r, 4000));
+
+    return {
+      messageCount: injectionResult.messages.length,
+      title: injectionResult.title,
+      folder: parentFolder,
+      filename: zipFilename,
+      attachmentsSaved,
+      attachmentsFailed,
+    };
   });
-
-  const settled = await waitForDownloadSettled(downloadId);
-  if (!settled.ok) {
-    throw new Error(`The export zip bundle failed to save (${settled.error}).`);
-  }
-
-  return {
-    messageCount: injectionResult.messages.length,
-    title: injectionResult.title,
-    folder: parentFolder,
-    filename: zipFilename,
-    attachmentsSaved,
-    attachmentsFailed,
-  };
 }
 
 // Scrapes conversation DOM and calls Gemini API to produce an intelligent summary.
@@ -1593,4 +1641,32 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
   })();
   return true; // keep the message channel open for the async response
+});
+
+// Long-lived port connection for streaming chat exports without MV3 timeout
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === "export-chat") {
+    port.onMessage.addListener(async (msg) => {
+      if (msg?.type === "PING") {
+        try {
+          port.postMessage({ type: "PONG" });
+        } catch (e) {}
+        return;
+      }
+      if (msg?.type === "START_EXPORT") {
+        try {
+          const info = await exportActiveChat(msg.options || {}, (text) => {
+            try {
+              port.postMessage({ type: "PROGRESS", text });
+            } catch (e) {}
+          });
+          port.postMessage({ type: "DONE", info });
+        } catch (err) {
+          try {
+            port.postMessage({ type: "ERROR", error: err.message || String(err) });
+          } catch (e) {}
+        }
+      }
+    });
+  }
 });

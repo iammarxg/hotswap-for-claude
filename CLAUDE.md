@@ -74,7 +74,7 @@ This repository maintains a private monorepo with a clean public mirror for open
 - Host permissions limited to claude.ai and generativelanguage.googleapis.com domains
 
 ## Current Version
-v1.1.1
+v1.1.2
 
 ## Support
 - Website: https://hotswap.jeddah.dev

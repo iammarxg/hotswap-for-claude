@@ -11,11 +11,17 @@
   window.__claudeLastCapturedBlob = null;
 
   const originalCreateObjectURL = URL.createObjectURL.bind(URL);
+  const originalRevokeObjectURL = URL.revokeObjectURL.bind(URL);
 
   URL.createObjectURL = function (obj) {
     const objectUrl = originalCreateObjectURL(obj);
     try {
-      if (obj instanceof Blob || (typeof File !== "undefined" && obj instanceof File)) {
+      const isBlob =
+        obj &&
+        (obj instanceof Blob ||
+          (typeof File !== "undefined" && obj instanceof File) ||
+          (typeof obj.size === "number" && typeof obj.slice === "function"));
+      if (isBlob) {
         const item = {
           objectUrl,
           blob: obj,
@@ -26,6 +32,7 @@
           timestamp: Date.now(),
         };
         window.__claudeExportBlobRegistry.set(objectUrl, item);
+        window.__claudeLastCapturedBlob = item;
 
         const reader = new FileReader();
         reader.onload = () => {
@@ -40,6 +47,22 @@
       }
     } catch (e) {}
     return objectUrl;
+  };
+
+  URL.revokeObjectURL = function (url) {
+    try {
+      const isExportActive =
+        document.documentElement.getAttribute("data-claude-export-active") === "true";
+      if (isExportActive) {
+        setTimeout(() => {
+          try {
+            originalRevokeObjectURL(url);
+          } catch (e) {}
+        }, 30000);
+        return;
+      }
+    } catch (e) {}
+    return originalRevokeObjectURL(url);
   };
 
   function captureAnchorDetails(a) {
@@ -63,8 +86,58 @@
       item.filename = downloadName;
     }
     window.__claudeLastCapturedBlob = item;
+
+    if (!item.dataUrl && (href.startsWith("blob:") || href.startsWith("http"))) {
+      fetch(href)
+        .then((r) => r.blob())
+        .then((b) => {
+          item.blob = b;
+          item.mimeType = b.type || item.mimeType;
+          const reader = new FileReader();
+          reader.onload = () => {
+            item.dataUrl = reader.result;
+          };
+          reader.readAsDataURL(b);
+        })
+        .catch(() => {});
+    }
+
     return item;
   }
+
+  const originalCreateElement = document.createElement.bind(document);
+  document.createElement = function (tag, options) {
+    const el = originalCreateElement(tag, options);
+    if (typeof tag === "string" && tag.toLowerCase() === "a") {
+      try {
+        const origDispatch = el.dispatchEvent.bind(el);
+        el.dispatchEvent = function (event) {
+          const isExportActive =
+            document.documentElement.getAttribute("data-claude-export-active") === "true";
+          captureAnchorDetails(el);
+          if (isExportActive) {
+            try {
+              event.preventDefault?.();
+              event.stopPropagation?.();
+            } catch (e) {}
+            return false;
+          }
+          return origDispatch(event);
+        };
+        const origClick = el.click.bind(el);
+        el.click = function () {
+          const isExportActive =
+            document.documentElement.getAttribute("data-claude-export-active") === "true";
+          captureAnchorDetails(el);
+          if (isExportActive) {
+            return;
+          }
+          return origClick();
+        };
+      } catch (e) {}
+    }
+    return el;
+  };
 
   const originalAnchorClick = HTMLAnchorElement.prototype.click;
   HTMLAnchorElement.prototype.click = function () {
@@ -73,14 +146,59 @@
         document.documentElement.getAttribute("data-claude-export-active") === "true";
       const href = this.getAttribute("href") || this.href || "";
 
-      if (href && (href.startsWith("blob:") || href.startsWith("data:"))) {
+      if (href) {
         captureAnchorDetails(this);
+        // Suppress native browser download prompt during active export so files are packed
+        // neatly into the export ZIP rather than creating stray browser downloads.
         if (isExportActive) {
           return;
         }
       }
     } catch (e) {}
     return originalAnchorClick.apply(this, arguments);
+  };
+
+  const originalAppendChild = Node.prototype.appendChild;
+  Node.prototype.appendChild = function (child) {
+    try {
+      if (
+        child &&
+        (child.tagName === "A" || child.nodeName === "A") &&
+        (child.hasAttribute?.("download") || child.download)
+      ) {
+        captureAnchorDetails(child);
+        const downloadName = child.getAttribute("download") || child.download || "";
+        window.__claudeExportedFilenames = window.__claudeExportedFilenames || new Map();
+        if (downloadName) {
+          window.__claudeExportedFilenames.set(downloadName.toLowerCase(), Date.now());
+        }
+        const normName = (downloadName || "").toLowerCase();
+        const lastExportedAt = window.__claudeExportedFilenames.get(normName);
+        const isRecentlyExported = lastExportedAt && Date.now() - lastExportedAt < 15000;
+        const isExportActive =
+          document.documentElement.getAttribute("data-claude-export-active") === "true";
+        if (isExportActive || isRecentlyExported) {
+          child.click = function () {
+            captureAnchorDetails(child);
+            return false;
+          };
+          try {
+            child.addEventListener(
+              "click",
+              (e) => {
+                captureAnchorDetails(child);
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation?.();
+                return false;
+              },
+              true
+            );
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+    return originalAppendChild.call(this, child);
   };
 
   document.addEventListener(
@@ -91,15 +209,12 @@
       if (!isExportActive) return;
 
       let el = e.target;
-      while (el && el !== document.body) {
-        if (el.tagName === "A" && el.href) {
-          const href = el.href;
-          if (href.startsWith("blob:") || href.startsWith("data:")) {
-            captureAnchorDetails(el);
-            e.preventDefault();
-            e.stopPropagation();
-            return false;
-          }
+      while (el && el !== document.documentElement) {
+        if (el.tagName === "A" && (el.href || el.getAttribute("href"))) {
+          captureAnchorDetails(el);
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
         }
         el = el.parentElement;
       }
