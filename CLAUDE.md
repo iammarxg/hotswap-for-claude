@@ -22,19 +22,26 @@ The extension operates across 4 execution realms with strict security boundaries
 2. **Background Service Worker** (`background.js`):
    - Orchestrates cookies (chrome.cookies), storage (chrome.storage.local), alarms, network requests
    - Manages SSE usage cache, cookie snapshots, usage endpoint queries, session keep-alive
+   - Provides persistent port connection with 4s PING/PONG heartbeats to prevent MV3 worker timeouts during exports
+   - Filters and cleans stray native browser downloads via `withCapturedDownloads`
 
 3. **Extension Popup** (`popup.js`/`popup.css`):
    - Renders responsive UI, monitors quota resets, triggers exports and profile swaps
    - Handles account management, settings, tools, and keyboard shortcuts
+   - Streams real-time progress updates during export via long-lived runtime port
 
 4. **Injected Export Script** (`export-page-script.js`):
    - Traverses virtualized chat DOM, captures messages, extracts attachments
    - Auto-expands Claude thought processes, handles artifact downloads
+   - Intercepts `URL.createObjectURL` to capture raw `Blob` objects directly in memory with 100% pixel fidelity
+   - Hooks `Node.prototype.appendChild` across `window` and child `iframe.contentWindow` realms to suppress native browser "Save As" prompts and package files directly into the ZIP
 
 ## Development & Build Instructions
-- Source files: `src/` directory
+- Source files: `src/` directory (private development source)
+- Public extension files: `extension/` directory (clean public mirror)
 - Build command: `python package.py` (creates distributable ZIPs in `dist/`)
-- Load unpacked: Select `dist/chrome` folder in chrome://extensions
+- Store assets command: `python scripts/package.py` (populates `store-assets/v{version}/` with archives, icons, and screenshots)
+- Load unpacked: Select `dist/chrome` or `extension/` folder in chrome://extensions
 - Publishing: `python scripts/publish_release.py` (creates clean public mirror - always includes CHANGELOG.md)
 
 ## Release Guidelines
