@@ -26,6 +26,7 @@ yarn-error.log*
 dist/
 build/
 .env
+temp/
 
 # Private master development & marketing assets
 src/

@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <a href="https://chromewebstore.google.com/detail/hotswap-for-claude/nnpnmjhealgmnbinplmccegkecabcpdk"><img src="https://img.shields.io/badge/Chrome_Web_Store-v1.1.1-blue?logo=googlechrome&logoColor=white" alt="Chrome Web Store"></a>
-  <a href="https://addons.mozilla.org/en-US/firefox/addon/hotswap-for-claude/"><img src="https://img.shields.io/badge/Firefox_Add--ons-v1.1.1-orange?logo=firefoxbrowser&logoColor=white" alt="Firefox Add-ons"></a>
+  <a href="https://chromewebstore.google.com/detail/hotswap-for-claude/nnpnmjhealgmnbinplmccegkecabcpdk"><img src="https://img.shields.io/badge/Chrome_Web_Store-v1.1.2-blue?logo=googlechrome&logoColor=white" alt="Chrome Web Store"></a>
+  <a href="https://addons.mozilla.org/en-US/firefox/addon/hotswap-for-claude/"><img src="https://img.shields.io/badge/Firefox_Add--ons-v1.1.2-orange?logo=firefoxbrowser&logoColor=white" alt="Firefox Add-ons"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL_v3-green.svg" alt="License: AGPL v3"></a>
 </p>
 
