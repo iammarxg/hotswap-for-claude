@@ -53,8 +53,8 @@ Run the built-in packaging script (requires Python 3, zero dependencies):
 python package.py
 ```
 This builds ready-to-use ZIP archives in `dist/`:
-* `dist/hotswap-for-claude-chrome-v1.1.0.zip` (Chrome, Edge, Brave, Opera)
-* `dist/hotswap-for-claude-firefox-v1.1.0.zip` (Firefox)
+* `dist/hotswap-for-claude-chrome-v1.1.2.zip` (Chrome, Edge, Brave, Opera)
+* `dist/hotswap-for-claude-firefox-v1.1.2.zip` (Firefox)
 
 ### 2. Load Unpacked in Chrome / Chromium
 1. Open `chrome://extensions/` and enable **Developer mode** (top right toggle).
