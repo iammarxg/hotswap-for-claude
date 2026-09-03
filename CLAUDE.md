@@ -95,10 +95,11 @@ v1.1.2
 ## Support
 - Website: https://hotswap.jeddah.dev
 - Support: support@jeddah.dev
+- GitHub: https://github.com/iammarxg/hotswap-for-claude
 - Chrome Web Store: nnpnmjhealgmnbinplmccegkecabcpdk
 - Firefox Add-ons: hotswap-for-claude@extension
 
 ## License
 Internal source: Private (not for redistribution)
-Public mirror: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
+Public mirror: GNU Affero General Public License v3.0 (AGPL-3.0-only)
 See LICENSE file for details.
