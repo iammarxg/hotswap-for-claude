@@ -11,6 +11,11 @@ HotSwap for Claude is a privacy-first Manifest V3 browser extension that enables
 - **Gemini AI Summarizer**: Context handoff summaries using gemini-3.5-flash-lite copied to clipboard
 - **Lossless Chat Exporter**: ZIP archives with full conversation transcript, thoughts, and attachments
 - **Privacy-First**: All data stored exclusively in chrome.storage.local - zero telemetry or external dependencies
+- **Fleet Capacity Overview** *(v1.2.0)*: Aggregate accounts bar showing ready/limited/exhausted counts with reset countdown
+- **Account Color Tags & Pinning** *(v1.2.0)*: Per-profile color badge (8 swatches) and pin-to-top ordering
+- **Desktop Reset Notifications** *(v1.2.0)*: `chrome.notifications` OS alert when exhausted account's session quota resets
+
+## Current Version: `v1.2.0`
 
 ## Technical Architecture
 The extension operates across 4 execution realms with strict security boundaries:

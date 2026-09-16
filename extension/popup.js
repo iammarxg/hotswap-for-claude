@@ -15,6 +15,7 @@ const addAccountPanel = document.getElementById("add-account-panel");
 const warningBox = document.getElementById("warning-box");
 const searchSectionEl = document.getElementById("search-section");
 const savedAccountsSectionEl = document.getElementById("saved-accounts-section");
+const fleetOverviewEl = document.getElementById("fleet-overview");
 
 // Theme selectors
 const themeQuickToggle = document.getElementById("theme-quick-toggle");
@@ -209,8 +210,24 @@ let lastProfiles = {};
 let lastActiveId = null;
 
 function sortedEntries(profiles) {
-  return Object.values(profiles).sort((a, b) => b.updatedAt - a.updatedAt);
+  const all = Object.values(profiles);
+  const pinned = all.filter((p) => p.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
+  const rest   = all.filter((p) => !p.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
+  return [...pinned, ...rest];
 }
+
+// 8-color palette for account tagging. Values chosen to be visually distinct
+// across all three themes (Midnight / Claude Light / Claude Dark).
+const ACCOUNT_COLORS = [
+  { hex: "#ef4444", label: "Red" },
+  { hex: "#f97316", label: "Orange" },
+  { hex: "#eab308", label: "Yellow" },
+  { hex: "#22c55e", label: "Green" },
+  { hex: "#3b82f6", label: "Blue" },
+  { hex: "#a855f7", label: "Purple" },
+  { hex: "#ec4899", label: "Pink" },
+  { hex: "#6b7280", label: "Gray" },
+];
 
 // Builds the shared contents of a profile row — used for both the
 // current-account card and each saved-account list item.
@@ -219,6 +236,7 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
   li.className =
     "profile-item" +
     (isCurrent ? " profile-item-current" : "") +
+    (!isCurrent && profile.pinned ? " profile-item-pinned" : "") +
     (!isCurrent && isQuickSwitchTarget ? " profile-item-best" : "");
   li.dataset.id = profile.id;
 
@@ -233,9 +251,26 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
     main.appendChild(bestBadge);
   }
 
+  // Avatar with optional color dot overlay
+  const avatarWrap = document.createElement("div");
+  avatarWrap.className = "avatar-wrap";
+
   const avatar = document.createElement("div");
   avatar.className = "avatar";
   avatar.textContent = initialsFor(profile.label);
+  // Tint avatar background when a color tag is set
+  if (profile.color) {
+    avatar.style.background = profile.color + "33"; // 20% opacity tint
+    avatar.style.color = profile.color;
+    avatar.style.borderColor = profile.color + "66";
+
+    const colorDot = document.createElement("span");
+    colorDot.className = "avatar-color-dot";
+    colorDot.style.background = profile.color;
+    colorDot.title = `Color tag — click 🎨 to change`;
+    avatarWrap.appendChild(colorDot);
+  }
+  avatarWrap.appendChild(avatar);
 
   const labelWrap = document.createElement("div");
   labelWrap.className = "profile-label-wrap";
@@ -258,6 +293,15 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
   labelSpan.className = "profile-label";
   labelSpan.textContent = profile.label;
 
+  // Pinned indicator badge
+  if (!isCurrent && profile.pinned) {
+    const pinIndicator = document.createElement("span");
+    pinIndicator.className = "pin-indicator";
+    pinIndicator.title = "Pinned to top";
+    pinIndicator.textContent = "📌";
+    topRow.appendChild(pinIndicator);
+  }
+
   topRow.appendChild(healthDot);
   topRow.appendChild(labelSpan);
   labelWrap.appendChild(topRow);
@@ -276,7 +320,7 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
     if (usageEl) labelWrap.appendChild(usageEl);
   }
 
-  main.appendChild(avatar);
+  main.appendChild(avatarWrap);
   main.appendChild(labelWrap);
 
   const actions = document.createElement("div");
@@ -308,6 +352,36 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
     e.stopPropagation();
     handleRefreshUsage(profile);
   });
+
+  // Color tag button (palette picker toggle) — not shown for the current account card
+  if (!isCurrent) {
+    const colorBtn = document.createElement("button");
+    colorBtn.className = "icon-btn";
+    colorBtn.title = "Set color tag";
+    colorBtn.textContent = "🎨";
+    colorBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const existing = li.querySelector(".color-picker-strip");
+      if (existing) {
+        existing.remove();
+        return;
+      }
+      li.appendChild(buildColorPicker(profile));
+    });
+
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "icon-btn" + (profile.pinned ? " pin-btn-active" : "");
+    pinBtn.title = profile.pinned ? "Unpin" : "Pin to top";
+    pinBtn.textContent = profile.pinned ? "📌" : "📍";
+    pinBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      handlePin(profile, !profile.pinned);
+    });
+
+    actions.appendChild(pinBtn);
+    actions.appendChild(colorBtn);
+  }
+
   actions.appendChild(refreshBtn);
   actions.appendChild(renameBtn);
   actions.appendChild(removeBtn);
@@ -322,6 +396,129 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
   return li;
 }
 
+// Builds an inline color-picker strip that appears below a profile item.
+// Clicking a swatch calls SET_PROFILE_COLOR then refreshes the list.
+function buildColorPicker(profile) {
+  const strip = document.createElement("div");
+  strip.className = "color-picker-strip";
+  strip.addEventListener("click", (e) => e.stopPropagation());
+
+  for (const { hex, label } of ACCOUNT_COLORS) {
+    const swatch = document.createElement("button");
+    swatch.className = "color-swatch" + (profile.color === hex ? " color-swatch-active" : "");
+    swatch.title = label;
+    swatch.style.background = hex;
+    swatch.addEventListener("click", (e) => {
+      e.stopPropagation();
+      handleSetColor(profile, hex);
+    });
+    strip.appendChild(swatch);
+  }
+
+  // "Clear" swatch
+  const clearSwatch = document.createElement("button");
+  clearSwatch.className = "color-swatch color-swatch-clear" + (!profile.color ? " color-swatch-active" : "");
+  clearSwatch.title = "No color";
+  clearSwatch.textContent = "×";
+  clearSwatch.addEventListener("click", (e) => {
+    e.stopPropagation();
+    handleSetColor(profile, null);
+  });
+  strip.appendChild(clearSwatch);
+
+  return strip;
+}
+
+// Fleet Capacity Overview — renders an aggregate bar across all saved profiles
+// showing how many accounts are ready / cooling down / exhausted.
+// Visible only when ≥ 2 accounts have session usage data.
+function renderFleetOverview(profiles) {
+  if (!fleetOverviewEl) return;
+
+  const all = Object.values(profiles);
+  const withSession = all.filter(
+    (p) => typeof p.usage?.limits?.session?.percentage === "number"
+  );
+
+  // Need at least 2 accounts with data to make the fleet bar useful
+  if (withSession.length < 2) {
+    fleetOverviewEl.classList.add("hidden");
+    fleetOverviewEl.textContent = "";
+    return;
+  }
+
+  const now = Date.now();
+  let ready = 0, cooling = 0, exhausted = 0;
+  let soonestReset = Infinity;
+  let totalFree = 0;
+
+  for (const p of withSession) {
+    const session = p.usage.limits.session;
+    const pct = session.percentage;
+    totalFree += Math.max(0, 100 - pct);
+
+    if (pct >= 100 || (session.resetsAt && session.resetsAt > now)) {
+      exhausted++;
+      if (session.resetsAt && session.resetsAt > now) {
+        soonestReset = Math.min(soonestReset, session.resetsAt);
+      }
+    } else if (pct >= 80) {
+      cooling++;
+    } else {
+      ready++;
+    }
+  }
+
+  const avgFree = Math.round(totalFree / withSession.length);
+
+  fleetOverviewEl.textContent = "";
+  fleetOverviewEl.classList.remove("hidden");
+
+  const parts = [];
+
+  if (ready > 0) {
+    const el = document.createElement("span");
+    el.className = "fleet-stat fleet-stat-ready";
+    el.textContent = `${ready} ready`;
+    parts.push(el);
+  }
+  if (cooling > 0) {
+    const el = document.createElement("span");
+    el.className = "fleet-stat fleet-stat-cooling";
+    el.textContent = `${cooling} limited`;
+    parts.push(el);
+  }
+  if (exhausted > 0) {
+    const el = document.createElement("span");
+    el.className = "fleet-stat fleet-stat-exhausted";
+    const resetNote = soonestReset < Infinity
+      ? ` · resets ${formatResetsIn(soonestReset, "session")}`
+      : "";
+    el.textContent = `${exhausted} exhausted${resetNote}`;
+    parts.push(el);
+  }
+
+  const avgEl = document.createElement("span");
+  avgEl.className = "fleet-stat fleet-stat-avg";
+  avgEl.textContent = `${avgFree}% avg free`;
+  parts.push(avgEl);
+
+  const label = document.createElement("span");
+  label.className = "fleet-label";
+  label.textContent = "Fleet";
+  fleetOverviewEl.appendChild(label);
+
+  for (let i = 0; i < parts.length; i++) {
+    if (i > 0) {
+      const sep = document.createElement("span");
+      sep.className = "fleet-sep";
+      sep.textContent = " · ";
+      fleetOverviewEl.appendChild(sep);
+    }
+    fleetOverviewEl.appendChild(parts[i]);
+  }
+}
+
 function renderProfiles(profiles, activeId, query = "") {
   listEl.textContent = "";
   const entries = sortedEntries(profiles);
@@ -329,6 +526,9 @@ function renderProfiles(profiles, activeId, query = "") {
   // credit used), not by list position, so compute it once up front —
   // stays stable while searching, same as background.js's own lookup.
   const quickSwitchTargetId = findQuickSwitchTargetId(profiles);
+
+  // Render the fleet capacity overview bar
+  renderFleetOverview(profiles);
 
   // The active account gets its own distinctive card at the top of the
   // popup, pulled out of the regular saved-accounts list below it.
@@ -700,6 +900,32 @@ async function handleRemove(profile) {
     return;
   }
   showStatus(`Removed "${profile.label}".`, "success");
+  await loadProfiles();
+}
+
+async function handlePin(profile, pinned) {
+  const res = await sendMessage({
+    type: "PIN_PROFILE",
+    profileId: profile.id,
+    pinned,
+  });
+  if (!res?.ok) {
+    showStatus(res?.error || "Could not pin account.", "error");
+    return;
+  }
+  await loadProfiles();
+}
+
+async function handleSetColor(profile, color) {
+  const res = await sendMessage({
+    type: "SET_PROFILE_COLOR",
+    profileId: profile.id,
+    color: color || null,
+  });
+  if (!res?.ok) {
+    showStatus(res?.error || "Could not set color.", "error");
+    return;
+  }
   await loadProfiles();
 }
 
@@ -1154,4 +1380,27 @@ if (geminiLink) {
 }
 
 loadGeminiKeySettings();
+
+// ---------- Notifications Toggle ----------
+
+const notificationsToggle = document.getElementById("notifications-toggle");
+
+async function loadNotificationsSettings() {
+  if (!notificationsToggle) return;
+  const res = await sendMessage({ type: "GET_NOTIFICATIONS_ENABLED" });
+  if (res?.ok) {
+    notificationsToggle.checked = res.enabled;
+  }
+}
+
+if (notificationsToggle) {
+  notificationsToggle.addEventListener("change", async () => {
+    await sendMessage({
+      type: "SET_NOTIFICATIONS_ENABLED",
+      enabled: notificationsToggle.checked,
+    });
+  });
+}
+
+loadNotificationsSettings();
 
