@@ -10,6 +10,7 @@
   --surface: #161b22;
   --surface-raised: #21262d;
   --border: #30363d;
+  --border-strong: #484f58;
   --border-focus: #58a6ff;
   --text: #f0f6fc;
   --text-dim: #8b949e;
@@ -18,6 +19,9 @@
   --accent-hover: #79c0ff;
   --accent-dim: #1f6feb;
   --accent-ink: #0d1117;
+  --text-accent: #79c0ff;
+  --bg-accent: rgba(31, 111, 235, 0.15);
+  --clay: #d97757;
   --success: #3fb950;
   --success-bg: rgba(46, 160, 67, 0.15);
   --warn-bg: rgba(187, 128, 9, 0.15);
@@ -30,19 +34,50 @@
   --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-[data-theme="claude-light"] {
-  --ink: #FAF9F5;
-  --surface: #FFFFFF;
-  --surface-raised: #F0EFEA;
-  --border: #E5E4DE;
-  --border-focus: #D97757;
-  --text: #1F1E1D;
-  --text-dim: #666560;
-  --text-muted: #9E9D96;
-  --accent: #D97757;
-  --accent-hover: #C15F3D;
-  --accent-dim: #E89578;
-  --accent-ink: #FFFFFF;
+[data-theme="claude-light"],
+[data-mode="light"] {
+  /* Claude.ai CDS Design Tokens (shipped CSS custom properties) */
+  --cds-page-bg: #f9f9f7;
+  --cds-surface-1: #fcfcfb;
+  --cds-surface-2: #ffffff;
+  --cds-panel: #ffffff;
+  --cds-text-primary: #0b0b0b;
+  --cds-text-secondary: #52514e;
+  --cds-text-muted: #898781;
+  --cds-fill-accent: #2a78d6;
+  --cds-text-accent: #184f95;
+  --cds-bg-accent: #cde2fb;
+  --cds-border: hsl(0 0% 0% / 10%); /* hsl(black / 10%) */
+  --cds-border-strong: hsl(0 0% 0% / 20%); /* hsl(black / 20%) */
+  --cds-clay: #d97757;
+
+  /* Aliases & Design Token Properties */
+  --page-bg: var(--cds-page-bg);
+  --surface-1: var(--cds-surface-1);
+  --surface-2: var(--cds-surface-2);
+  --panel: var(--cds-panel);
+  --surface-panel: var(--cds-panel);
+  --text-primary: var(--cds-text-primary);
+  --text-secondary: var(--cds-text-secondary);
+  --text-muted: var(--cds-text-muted);
+  --fill-accent: var(--cds-fill-accent);
+  --text-accent: var(--cds-text-accent);
+  --bg-accent: var(--cds-bg-accent);
+  --border: var(--cds-border);
+  --border-strong: var(--cds-border-strong);
+  --border-focus: var(--cds-fill-accent);
+  --clay: var(--cds-clay);
+
+  /* Theme Engine Variables */
+  --ink: var(--cds-page-bg);
+  --surface: var(--cds-surface-1);
+  --surface-raised: var(--cds-surface-2);
+  --text: var(--cds-text-primary);
+  --text-dim: var(--cds-text-secondary);
+  --accent: var(--cds-fill-accent);
+  --accent-hover: #184f95;
+  --accent-dim: #184f95;
+  --accent-ink: #ffffff;
   --success: #2E7D32;
   --success-bg: #EDF7ED;
   --warn-bg: #FFF4E5;
@@ -52,19 +87,55 @@
   --danger-bg: #FFEBEE;
 }
 
-[data-theme="claude-dark"] {
-  --ink: #1F1E1D;
-  --surface: #2B2A27;
-  --surface-raised: #383733;
-  --border: #403F3B;
-  --border-focus: #D97757;
-  --text: #ECEBE8;
-  --text-dim: #B4B3AD;
-  --text-muted: #7D7C75;
-  --accent: #D97757;
-  --accent-hover: #E08B6E;
-  --accent-dim: #A84E32;
-  --accent-ink: #FFFFFF;
+[data-theme="claude-dark"],
+[data-mode="dark"] {
+  /* Claude.ai CDS Design Tokens (shipped CSS custom properties) */
+  --cds-page-bg: #0b0b0b;
+  --cds-surface-1: #151515;
+  --cds-surface-2: #1a1a19;
+  --cds-panel: #1a1a19;
+  --cds-surface-3: #20201f;
+  --cds-popover: #20201f;
+  --cds-text-primary: #f0efec;
+  --cds-text-secondary: #c3c2b7;
+  --cds-text-muted: #898781;
+  --cds-fill-accent: #2a78d6;
+  --cds-text-accent: #6da7ec;
+  --cds-bg-accent: #032042;
+  --cds-border: hsl(0 0% 100% / 10%); /* hsl(white / 10%) */
+  --cds-border-strong: hsl(0 0% 100% / 20%); /* hsl(white / 20%) */
+  --cds-clay: #d97757;
+
+  /* Aliases & Design Token Properties */
+  --page-bg: var(--cds-page-bg);
+  --surface-1: var(--cds-surface-1);
+  --surface-2: var(--cds-surface-2);
+  --panel: var(--cds-panel);
+  --surface-panel: var(--cds-panel);
+  --surface-3: var(--cds-surface-3);
+  --popover: var(--cds-popover);
+  --surface-popover: var(--cds-popover);
+  --text-primary: var(--cds-text-primary);
+  --text-secondary: var(--cds-text-secondary);
+  --text-muted: var(--cds-text-muted);
+  --fill-accent: var(--cds-fill-accent);
+  --text-accent: var(--cds-text-accent);
+  --bg-accent: var(--cds-bg-accent);
+  --border: var(--cds-border);
+  --border-strong: var(--cds-border-strong);
+  --border-focus: var(--cds-fill-accent);
+  --clay: var(--cds-clay);
+
+  /* Theme Engine Variables */
+  --ink: var(--cds-page-bg);
+  --surface: var(--cds-surface-1);
+  --surface-raised: var(--cds-surface-2);
+  --text: var(--cds-text-primary);
+  --text-dim: var(--cds-text-secondary);
+  --accent: var(--cds-fill-accent);
+  --accent-hover: #458eed;
+  --accent-dim: #1f6feb;
+  --accent-ink: #ffffff;
   --success: #81C784;
   --success-bg: rgba(76, 175, 80, 0.15);
   --warn-bg: rgba(255, 152, 0, 0.15);
@@ -120,6 +191,13 @@ body {
   animation: breathe 2.4s ease-in-out infinite;
 }
 
+[data-theme="claude-light"] .header-dot,
+[data-theme="claude-dark"] .header-dot,
+[data-mode="light"] .header-dot,
+[data-mode="dark"] .header-dot {
+  background: var(--clay);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .header-dot {
     animation: none;
@@ -169,7 +247,7 @@ body {
 .icon-btn:hover {
   background: var(--surface-raised);
   color: var(--text);
-  border-color: var(--text-dim);
+  border-color: var(--border-strong, var(--text-dim));
 }
 
 .header-refresh-all.spinning {
@@ -292,7 +370,7 @@ body {
   margin: 0;
   font-size: 11.5px;
   line-height: 1.45;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 
 /* ---------- Theme Switcher Grid (Settings) ---------- */
@@ -318,7 +396,7 @@ body {
 }
 
 .theme-card:hover {
-  border-color: var(--text-dim);
+  border-color: var(--border-strong, var(--text-dim));
   background: var(--surface-raised);
 }
 
@@ -341,19 +419,20 @@ body {
   width: 9px;
   height: 9px;
   border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 .theme-preview-midnight .dot-canvas { background: #0d1117; }
 .theme-preview-midnight .dot-surface { background: #21262d; }
 .theme-preview-midnight .dot-accent { background: #58a6ff; }
 
-.theme-preview-claude-light .dot-canvas { background: #FAF9F5; }
-.theme-preview-claude-light .dot-surface { background: #FFFFFF; }
-.theme-preview-claude-light .dot-accent { background: #D97757; }
+.theme-preview-claude-light .dot-canvas { background: #f9f9f7; }
+.theme-preview-claude-light .dot-surface { background: #ffffff; }
+.theme-preview-claude-light .dot-accent { background: #2a78d6; }
 
-.theme-preview-claude-dark .dot-canvas { background: #1F1E1D; }
-.theme-preview-claude-dark .dot-surface { background: #383733; }
-.theme-preview-claude-dark .dot-accent { background: #D97757; }
+.theme-preview-claude-dark .dot-canvas { background: #0b0b0b; }
+.theme-preview-claude-dark .dot-surface { background: #1a1a19; }
+.theme-preview-claude-dark .dot-accent { background: #2a78d6; }
 
 .theme-card-name {
   font-size: 11px;
@@ -366,7 +445,6 @@ body {
   font-size: 9.5px;
   font-family: var(--mono);
   color: var(--text-dim);
-  text-transform: uppercase;
 }
 
 /* ---------- Account Search & Add Panel ---------- */
@@ -389,7 +467,7 @@ body {
 }
 
 .search-input::placeholder {
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 
 .search-input:focus-visible {
@@ -414,7 +492,7 @@ body {
 
 .add-account-toggle:hover {
   background: var(--surface-raised);
-  border-color: var(--text-dim);
+  border-color: var(--border-strong, var(--text-dim));
 }
 
 .add-account-panel {
@@ -451,7 +529,7 @@ body {
 }
 
 .profile-item:hover {
-  border-color: var(--text-dim);
+  border-color: var(--border-strong, var(--text-dim));
   background: var(--surface-raised);
 }
 
@@ -680,7 +758,7 @@ body {
   margin: 0;
   font-size: 11px;
   line-height: 1.4;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 
 .export-block .btn {
@@ -740,7 +818,7 @@ body {
 }
 
 .settings-link {
-  color: var(--accent);
+  color: var(--text-accent, var(--accent));
   text-decoration: underline;
   cursor: pointer;
 }
@@ -778,8 +856,8 @@ body {
   font-weight: 600;
   padding: 2px 5px;
   border-radius: 3px;
-  background: var(--accent-dim);
-  color: #fff;
+  background: var(--bg-accent, var(--accent-dim));
+  color: var(--text-accent, #fff);
 }
 
 .summary-hub-title {
@@ -856,7 +934,7 @@ body {
 }
 
 #new-label::placeholder {
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 
 #new-label:focus-visible {
@@ -898,7 +976,7 @@ body {
 
 .btn-primary:disabled {
   background: var(--surface-raised);
-  color: var(--text-dim);
+  color: var(--text-muted);
   cursor: not-allowed;
 }
 
@@ -910,11 +988,11 @@ body {
 
 .btn-ghost:hover {
   background: var(--surface-raised);
-  border-color: var(--text-dim);
+  border-color: var(--border-strong, var(--text-dim));
 }
 
 .btn-ghost:disabled {
-  color: var(--text-dim);
+  color: var(--text-muted);
   cursor: not-allowed;
 }
 
@@ -1002,7 +1080,7 @@ body {
 }
 
 .folder-input::placeholder {
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 
 .folder-btn-row {
@@ -1061,7 +1139,7 @@ body {
 }
 
 .shortcuts-list kbd.shortcut-unset {
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-style: italic;
   opacity: 0.7;
 }
@@ -1078,3 +1156,142 @@ body {
   line-height: 1.4;
   text-align: center;
 }
+
+/* ==========================================================================
+   v1.2.0 Additions
+   ========================================================================== */
+
+/* ---------- Fleet Capacity Overview ---------- */
+
+.fleet-overview {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 7px 14px;
+  font-size: 11px;
+  line-height: 1;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.fleet-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.fleet-sep {
+  color: var(--border-strong, var(--text-muted));
+}
+
+.fleet-stat {
+  white-space: nowrap;
+}
+
+.fleet-stat-ready  { color: var(--success); }
+.fleet-stat-cooling { color: var(--warn-text); }
+.fleet-stat-exhausted { color: var(--danger); }
+.fleet-stat-avg { color: var(--text-dim); }
+
+/* ---------- Avatar Color Tag ---------- */
+
+/* Wrapper so we can absolutely-position the color dot over the avatar */
+.avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Small colored circle in the top-right corner of the avatar */
+.avatar-color-dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  pointer-events: none;
+}
+
+/* ---------- Account Pin ---------- */
+
+.profile-item-pinned {
+  border-left: 2px solid var(--accent-dim);
+}
+
+.pin-indicator {
+  font-size: 10px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.pin-btn-active {
+  color: var(--accent) !important;
+  border-color: var(--accent-dim) !important;
+}
+
+/* ---------- Color Picker Strip ---------- */
+
+.color-picker-strip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  background: var(--surface-raised);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 5px 5px;
+  flex-wrap: wrap;
+}
+
+.color-swatch {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+  flex-shrink: 0;
+}
+
+.color-swatch:hover {
+  transform: scale(1.18);
+  border-color: var(--text);
+}
+
+.color-swatch-active {
+  border-color: var(--text) !important;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* "No color" clear swatch */
+.color-swatch-clear {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.color-swatch-clear:hover {
+  border-color: var(--danger) !important;
+  color: var(--danger);
+}
+

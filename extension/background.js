@@ -6,6 +6,13 @@ const SSE_USAGE_KEY = "hotswap_sse_usage";
 const SSE_USAGE_TTL_MS = 8 * 24 * 60 * 60 * 1000; // 8 days (weekly window TTL)
 const SSE_SAME_WINDOW_TOLERANCE_MS = 15 * 1000; // 15 seconds
 
+// ---------- Quota Monitor & Reset Notifications ----------
+const QUOTA_MONITOR_ALARM = "quota-monitor";
+const RESET_NOTIFICATIONS_ENABLED_KEY = "resetNotificationsEnabled";
+// Tracks which (profileId + resetsAt) pairs have already fired a notification
+// so we don't re-notify on every 5-min poll after the reset has already been announced.
+const RESET_SEEN_KEY = "resetNotificationsSeen";
+
 async function getStoredSseUsageMap() {
   const data = await chrome.storage.local.get([SSE_USAGE_KEY]);
   return data[SSE_USAGE_KEY] || {};
@@ -625,14 +632,25 @@ async function setProfileColor(profileId, color) {
   await saveProfiles(profiles);
 }
 
+// Pin a profile to the top of the accounts list — purely cosmetic ordering,
+// doesn't touch updatedAt so it doesn't interfere with usage-based sort.
+async function pinProfile(profileId, pinned) {
+  const profiles = await getProfiles();
+  if (!profiles[profileId]) throw new Error("Profile not found.");
+  profiles[profileId].pinned = !!pinned;
+  await saveProfiles(profiles);
+}
+
 // Same sort the popup uses (most-recently-active first), so
 // cycle-next-account/cycle-prev-account step through accounts in the same
 // order they're listed in the popup.
 async function getSortedProfileIds() {
   const profiles = await getProfiles();
-  return Object.values(profiles)
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map((p) => p.id);
+  const all = Object.values(profiles);
+  // Pinned profiles float to the top; within each group sort most-recently-active first.
+  const pinned = all.filter((p) => p.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
+  const rest   = all.filter((p) => !p.pinned).sort((a, b) => b.updatedAt - a.updatedAt);
+  return [...pinned, ...rest].map((p) => p.id);
 }
 
 // quick-switch-1's target: whichever saved account has the most 5-hour
@@ -898,12 +916,82 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       console.warn("[auto-refresh] failed:", err);
     }
   }
+  if (alarm.name === QUOTA_MONITOR_ALARM) {
+    try {
+      await checkAndFireResetNotifications();
+    } catch (err) {
+      console.warn("[quota-monitor] failed:", err);
+    }
+  }
 });
 
-// Set up the alarm on install/update. Alarms persist across service-worker
+// Checks all saved profiles' cached session usage. If a profile's 5h session
+// just reset (resetsAt crossed from future → past) AND its previous utilization
+// was high (≥ 80%), fire an OS desktop notification so the user knows that
+// account is ready again — without needing to open the popup.
+//
+// Uses a "seen" ledger in chrome.storage.local keyed by `profileId:resetsAt`
+// so we only notify once per reset event, not on every 5-minute poll tick.
+async function checkAndFireResetNotifications() {
+  const data = await chrome.storage.local.get([
+    RESET_NOTIFICATIONS_ENABLED_KEY,
+    RESET_SEEN_KEY,
+  ]);
+  const enabled = data[RESET_NOTIFICATIONS_ENABLED_KEY] !== false; // default: enabled
+  if (!enabled) return;
+
+  const seen = data[RESET_SEEN_KEY] || {};
+  const now = Date.now();
+  const profiles = await getProfiles();
+  let seenUpdated = false;
+
+  for (const profile of Object.values(profiles)) {
+    const session = profile.usage?.limits?.session;
+    if (!session || typeof session.resetsAt !== "number") continue;
+    if (typeof session.percentage !== "number") continue;
+
+    // Only notify for accounts that were heavily used (≥ 80%) and have now reset
+    const wasHeavilyUsed = session.percentage >= 80;
+    const hasReset = session.resetsAt > 0 && session.resetsAt < now;
+    if (!wasHeavilyUsed || !hasReset) continue;
+
+    const seenKey = `${profile.id}:${session.resetsAt}`;
+    if (seen[seenKey]) continue; // Already notified for this exact reset event
+
+    // Mark as seen before firing so a crash doesn't cause a flood of re-fires
+    seen[seenKey] = now;
+    seenUpdated = true;
+
+    const label = profile.label || "Account";
+    const pct = Math.round(session.percentage);
+    chrome.notifications.create(`reset-${seenKey}`, {
+      type: "basic",
+      iconUrl: "icons/icon128.png",
+      title: "HotSwap — Session Ready ✅",
+      message: `"${label}" 5h session has reset (was ${pct}% used). Ready to use!`,
+      priority: 1,
+    });
+  }
+
+  if (seenUpdated) {
+    // Prune old seen entries (> 8 days) to prevent unbounded growth
+    const cutoff = now - 8 * 24 * 60 * 60 * 1000;
+    for (const [key, timestamp] of Object.entries(seen)) {
+      if (timestamp < cutoff) delete seen[key];
+    }
+    await chrome.storage.local.set({ [RESET_SEEN_KEY]: seen });
+  }
+}
+
+// Set up alarms on install/update. Alarms persist across service-worker
 // restarts, so this only needs to run on lifecycle events.
 chrome.runtime.onInstalled.addListener(() => {
   setupAutoRefresh();
+  // Quota monitor: polls every 5 minutes to detect account resets
+  chrome.alarms.create(QUOTA_MONITOR_ALARM, {
+    delayInMinutes: 5,
+    periodInMinutes: 5,
+  });
 });
 
 // ---------- Chat export ----------
@@ -1631,6 +1719,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           } catch (err) {
             sendResponse({ ok: false, error: err.message || String(err) });
           }
+          break;
+        }
+        case "PIN_PROFILE": {
+          await pinProfile(message.profileId, message.pinned);
+          sendResponse({ ok: true });
+          break;
+        }
+        case "GET_NOTIFICATIONS_ENABLED": {
+          const d = await chrome.storage.local.get(RESET_NOTIFICATIONS_ENABLED_KEY);
+          const enabled = d[RESET_NOTIFICATIONS_ENABLED_KEY] !== false;
+          sendResponse({ ok: true, enabled });
+          break;
+        }
+        case "SET_NOTIFICATIONS_ENABLED": {
+          await chrome.storage.local.set({
+            [RESET_NOTIFICATIONS_ENABLED_KEY]: !!message.enabled,
+          });
+          sendResponse({ ok: true });
           break;
         }
         default:

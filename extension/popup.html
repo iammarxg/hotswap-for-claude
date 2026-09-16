@@ -65,6 +65,9 @@
     </div>
 
     <div id="tab-panel-accounts" class="tab-panel" data-tab="accounts" role="tabpanel">
+      <!-- Fleet Capacity Overview — shown when ≥2 accounts have session usage data -->
+      <div id="fleet-overview" class="fleet-overview hidden"></div>
+
       <section id="current-account-section" class="panel panel-tight-bottom hidden">
         <h2 class="eyebrow">Current account</h2>
         <ul class="profile-list profile-list-current">
@@ -220,7 +223,7 @@
                 <span class="theme-dot dot-accent"></span>
               </div>
               <span class="theme-card-name">Claude Dark</span>
-              <span class="theme-card-tag">Warm</span>
+              <span class="theme-card-tag">Dark</span>
             </button>
           </div>
         </div>
@@ -251,6 +254,21 @@
           <button id="refresh-sessions-btn" class="btn btn-ghost" type="button">
             Refresh all sessions now
           </button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="eyebrow">🔔 Notifications</h2>
+        <div class="panel-body">
+          <p class="hint">
+            Get a desktop notification when an exhausted account's 5-hour session quota resets and is ready to use again.
+          </p>
+          <div class="auto-refresh-row">
+            <label class="toggle-label" for="notifications-toggle">
+              <input id="notifications-toggle" type="checkbox" checked />
+              <span>Notify me when a session resets</span>
+            </label>
+          </div>
         </div>
       </section>
 

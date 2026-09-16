@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🎨 Design System & Theme Alignment
+- **Claude Design System Tokens**: Updated Claude Light and Claude Dark themes to match live Claude.ai CSS custom property tokens (`--cds-*`).
+- **Primary Blue CTA & Secondary Clay**: Aligned primary action buttons, active tab indicators, and focus outlines to Claude blue (`#2a78d6`), reserving brand clay (`#d97757`) for non-primary brand highlights like the header dot.
+- **Text & Surface Hierarchy**: Mapped `text-muted` (`#898781`) across hints, input placeholders, and disabled states; fixed dark mode best-account accent border contrast.
+- **Dual Selector Compatibility**: Added support for both extension `data-theme` and native Claude.ai `data-mode="light"` / `data-mode="dark"` attributes.
+
+---
+
+## [v1.2.0] - 2026-09-16
+
+### ✨ Added
+
+- **🔔 Desktop Reset Notifications** — Get an OS-level push notification when an exhausted account's 5-hour session quota resets and is ready again. Polls every 5 minutes using the `chrome.alarms` system; uses a "seen" ledger so each reset event fires exactly once. Toggle on/off from Settings → Notifications.
+
+- **🏷️ Account Color Tags** — Assign one of 8 color swatches to any saved account for quick visual identification. Click the 🎨 button on any account row to open an inline color picker; color is displayed as a tinted avatar background and a small colored dot. The color persists across popup opens and is stored per-profile.
+
+- **📌 Account Pinning** — Pin any saved account to the top of the list so your most-used accounts never scroll out of reach. Click the 📍 button to pin; 📌 to unpin. Pinned accounts sort to the top in both the popup list and keyboard-shortcut cycling order, with a subtle left-border accent to distinguish them.
+
+- **⚡ Fleet Capacity Overview** — A compact aggregate status bar appears at the top of the Accounts tab when 2+ accounts have session data: shows how many accounts are **ready** / **limited** / **exhausted**, the soonest reset countdown, and average free capacity across the fleet. Hidden automatically when you only have one account.
+
+### 🔒 Permissions
+- Added `notifications` permission to `manifest.json` to enable `chrome.notifications.create()` for desktop alerts. Users will be prompted once on the next extension update.
+
 ---
 
 ## [v1.1.2] - 2026-09-03
@@ -40,8 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 🎨 Unified Theme Engine (3 Curated Palettes)
 - **Midnight (Signature Default)**: High-contrast slate/obsidian palette (`#0d1117` / `#161b22`) with electric cyan & sapphire accents (`#58a6ff`).
-- **Claude Light**: Authentic Claude.ai light mode aesthetic (`#FAF9F5` / `#FFFFFF`) with warm terracotta/clay accents (`#D97757`).
-- **Claude Dark**: Authentic Claude.ai dark mode aesthetic (`#1F1E1D` / `#2B2A27`) with warm clay highlights.
+- **Claude Light**: Authentic Claude.ai light mode aesthetic (`#f9f9f7` / `#fcfcfb` / `#ffffff`) with verified product tokens, blue primary CTA (`#2a78d6`), and clay accents (`#d97757`).
+- **Claude Dark**: Authentic Claude.ai dark mode aesthetic (`#0b0b0b` / `#151515` / `#1a1a19`) with blue primary CTA (`#2a78d6`) and clay highlights.
 - **Zero-Flash Bootstrap**: Synchronous pre-render theme bootstrap applying CSS custom variables instantly with 0ms FOUT.
 - **Header Theme Toggle**: 1-click quick theme cycling button directly in the popup header.
 - **Visual Theme Selector**: Settings tab features interactive theme cards with live color swatch indicators.
