@@ -14,8 +14,9 @@ HotSwap for Claude is a privacy-first Manifest V3 browser extension that enables
 - **Fleet Capacity Overview** *(v1.2.0)*: Aggregate accounts bar showing ready/limited/exhausted counts with reset countdown
 - **Account Color Tags & Pinning** *(v1.2.0)*: Per-profile color badge (8 swatches) and pin-to-top ordering
 - **Desktop Reset Notifications** *(v1.2.0)*: `chrome.notifications` OS alert when exhausted account's session quota resets
+- **Deterministic Quota Cooldown Reset** *(v1.2.1)*: Instant 0% normalization and live UI ticker eliminating hanging "resets soon"
 
-## Current Version: `v1.2.0`
+## Current Version: `v1.2.1`
 
 ## Technical Architecture
 The extension operates across 4 execution realms with strict security boundaries:
