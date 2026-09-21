@@ -391,11 +391,20 @@ async function fetchUsageForActiveSession() {
     const sseMap = await getStoredSseUsageMap();
     const sseData = sseMap[orgId];
     if (sseData) {
-      if (sseData.session?.resetsAt && sseData.session.resetsAt > Date.now()) {
-        limits.session = sseData.session;
+      if (sseData.session) {
+        if (sseData.session.resetsAt && sseData.session.resetsAt > Date.now()) {
+          limits.session = sseData.session;
+        } else {
+          // Cooldown window has passed — quota is reset and available
+          limits.session = { percentage: 0, resetsAt: null };
+        }
       }
-      if (sseData.weekly?.resetsAt && sseData.weekly.resetsAt > Date.now()) {
-        limits.weekly = sseData.weekly;
+      if (sseData.weekly) {
+        if (sseData.weekly.resetsAt && sseData.weekly.resetsAt > Date.now()) {
+          limits.weekly = sseData.weekly;
+        } else {
+          limits.weekly = { percentage: 0, resetsAt: null };
+        }
       }
     }
   }
@@ -660,6 +669,7 @@ async function getSortedProfileIds() {
 // profile has cached usage data yet (e.g. right after install).
 async function getLeastUsedProfileId() {
   const profiles = await getProfiles();
+  const now = Date.now();
   const withSessionUsage = Object.values(profiles).filter(
     (p) => typeof p.usage?.limits?.session?.percentage === "number"
   );
@@ -669,9 +679,13 @@ async function getLeastUsedProfileId() {
     return ordered[0] || null;
   }
 
-  withSessionUsage.sort(
-    (a, b) => a.usage.limits.session.percentage - b.usage.limits.session.percentage
-  );
+  withSessionUsage.sort((a, b) => {
+    const aSession = a.usage.limits.session;
+    const bSession = b.usage.limits.session;
+    const aPct = aSession.resetsAt && aSession.resetsAt <= now ? 0 : aSession.percentage;
+    const bPct = bSession.resetsAt && bSession.resetsAt <= now ? 0 : bSession.percentage;
+    return aPct - bPct;
+  });
   return withSessionUsage[0].id;
 }
 
@@ -925,52 +939,71 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
 });
 
+// Helper to expire any limit in a limits object whose resetsAt timestamp has passed.
+// Resets percentage to 0 and clears resetsAt so the UI and background never hang on "resets soon".
+function expirePassedLimits(limits, now = Date.now()) {
+  if (!limits) return false;
+  let changed = false;
+  for (const key of Object.keys(limits)) {
+    const limit = limits[key];
+    if (limit && typeof limit.resetsAt === "number" && limit.resetsAt > 0 && limit.resetsAt <= now) {
+      limit.percentage = 0;
+      limit.resetsAt = null;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 // Checks all saved profiles' cached session usage. If a profile's 5h session
 // just reset (resetsAt crossed from future → past) AND its previous utilization
 // was high (≥ 80%), fire an OS desktop notification so the user knows that
 // account is ready again — without needing to open the popup.
 //
-// Uses a "seen" ledger in chrome.storage.local keyed by `profileId:resetsAt`
-// so we only notify once per reset event, not on every 5-minute poll tick.
+// Also resets all expired limits (session, weekly, etc.) back to 0% utilization
+// and clears resetsAt, persisting the refreshed state to chrome.storage.local.
 async function checkAndFireResetNotifications() {
   const data = await chrome.storage.local.get([
     RESET_NOTIFICATIONS_ENABLED_KEY,
     RESET_SEEN_KEY,
   ]);
   const enabled = data[RESET_NOTIFICATIONS_ENABLED_KEY] !== false; // default: enabled
-  if (!enabled) return;
 
   const seen = data[RESET_SEEN_KEY] || {};
   const now = Date.now();
   const profiles = await getProfiles();
   let seenUpdated = false;
+  let profilesUpdated = false;
 
   for (const profile of Object.values(profiles)) {
-    const session = profile.usage?.limits?.session;
-    if (!session || typeof session.resetsAt !== "number") continue;
-    if (typeof session.percentage !== "number") continue;
+    if (!profile.usage?.limits) continue;
 
-    // Only notify for accounts that were heavily used (≥ 80%) and have now reset
-    const wasHeavilyUsed = session.percentage >= 80;
-    const hasReset = session.resetsAt > 0 && session.resetsAt < now;
-    if (!wasHeavilyUsed || !hasReset) continue;
+    const session = profile.usage.limits.session;
+    if (session && typeof session.resetsAt === "number" && session.resetsAt > 0 && session.resetsAt <= now) {
+      // Check if we should fire an OS notification before zeroing out the percentage
+      const wasHeavilyUsed = typeof session.percentage === "number" && session.percentage >= 80;
+      const seenKey = `${profile.id}:${session.resetsAt}`;
+      if (enabled && wasHeavilyUsed && !seen[seenKey]) {
+        seen[seenKey] = now;
+        seenUpdated = true;
 
-    const seenKey = `${profile.id}:${session.resetsAt}`;
-    if (seen[seenKey]) continue; // Already notified for this exact reset event
+        const label = profile.label || "Account";
+        const pct = Math.round(session.percentage);
+        chrome.notifications.create(`reset-${seenKey}`, {
+          type: "basic",
+          iconUrl: "icons/icon128.png",
+          title: "HotSwap — Session Ready ✅",
+          message: `"${label}" 5h session has reset (was ${pct}% used). Ready to use!`,
+          priority: 1,
+        });
+      }
+    }
 
-    // Mark as seen before firing so a crash doesn't cause a flood of re-fires
-    seen[seenKey] = now;
-    seenUpdated = true;
-
-    const label = profile.label || "Account";
-    const pct = Math.round(session.percentage);
-    chrome.notifications.create(`reset-${seenKey}`, {
-      type: "basic",
-      iconUrl: "icons/icon128.png",
-      title: "HotSwap — Session Ready ✅",
-      message: `"${label}" 5h session has reset (was ${pct}% used). Ready to use!`,
-      priority: 1,
-    });
+    // Expire any passed limits (session, weekly, model-scoped) to 0%
+    if (expirePassedLimits(profile.usage.limits, now)) {
+      profile.usage.capturedAt = now;
+      profilesUpdated = true;
+    }
   }
 
   if (seenUpdated) {
@@ -981,6 +1014,12 @@ async function checkAndFireResetNotifications() {
     }
     await chrome.storage.local.set({ [RESET_SEEN_KEY]: seen });
   }
+
+  if (profilesUpdated) {
+    await saveProfiles(profiles);
+  }
+
+  return profiles;
 }
 
 // Set up alarms on install/update. Alarms persist across service-worker
@@ -1594,7 +1633,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           break;
         }
         case "GET_PROFILES": {
-          const profiles = await getProfiles();
+          let profiles;
+          try {
+            profiles = await checkAndFireResetNotifications();
+          } catch (err) {
+            console.warn("checkAndFireResetNotifications error during GET_PROFILES", err);
+            profiles = await getProfiles();
+          }
           const activeId = await getActiveProfileId();
           // Health is computed fresh each time (cheap, no storage write)
           // rather than cached, since "now" keeps moving.

@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.2.1] - 2026-09-21
+
+### 🐛 Fixed & Improved
+
+- **Fixed Hanging "resets soon" Quota Indicator**: Eliminated the bug where expired cooldown timers permanently displayed `100% · resets soon`. As soon as a limit's `resetsAt` timestamp has elapsed, `formatResetsIn()` immediately clears the countdown label and the quota is automatically normalized back to `0%` (Ready) across all account views.
+- **Instant Cooldown Normalization**: Expired 5h session and weekly limits are evaluated as `0%` usage across the popup and background routines without requiring manual refresh clicks or risky cookie swaps.
+- **Fleet Capacity & Quick-Switch Auto-Recovery**: Fleet Capacity overview now immediately counts reset accounts as **Ready** (`ready++`) rather than stuck in Exhausted, and `quick-switch-1` (`Alt+Shift+1`) promptly recognizes newly reset accounts as eligible candidates with 100% free capacity.
+- **Background Storage Persistence**: The 5-minute quota monitor alarm and `GET_PROFILES` handler persist the `{ percentage: 0, resetsAt: null }` state to `chrome.storage.local` after dispatching any pending desktop notifications.
+- **Live Popup Countdown & Auto-Reset Ticker**: Added a 30-second live background ticker in the popup that dynamically updates countdown labels (e.g. "resets in 5m" → "resets in 4m") and automatically re-fetches profiles if a cooldown passes while the popup is open, flipping the UI straight to `0%`.
+- **Free Plan Post-Reset Fallback**: Fixed SSE limit fallback so Free-tier accounts whose cooldown window passed reset gracefully to 0% rather than displaying "Send a message to view limits".
+
+---
+
 ## [v1.2.0] - 2026-09-16
 
 ### ✨ Added

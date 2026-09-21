@@ -130,18 +130,32 @@ async function loadDynamicShortcuts() {
 
 loadDynamicShortcuts();
 
+// Returns the effective limit object for rendering, zeroing out expired quotas.
+function getEffectiveLimit(v, now = Date.now()) {
+  if (!v || typeof v.percentage !== "number") return null;
+  if (v.resetsAt && v.resetsAt <= now) {
+    return { ...v, percentage: 0, resetsAt: null };
+  }
+  return v;
+}
+
 // Mirrors background.js's getLeastUsedProfileId(): quick-switch-1 targets
 // whichever saved account has the most 5-hour ("session") credit left —
 // i.e. the lowest session-limit percentage, not the weekly one. Computed
 // here too so the popup can badge the right account without a round trip.
 function findQuickSwitchTargetId(profiles) {
+  const now = Date.now();
   const withSessionUsage = Object.values(profiles).filter(
     (p) => typeof p.usage?.limits?.session?.percentage === "number"
   );
   if (withSessionUsage.length === 0) return null;
-  withSessionUsage.sort(
-    (a, b) => a.usage.limits.session.percentage - b.usage.limits.session.percentage
-  );
+  withSessionUsage.sort((a, b) => {
+    const aEff = getEffectiveLimit(a.usage.limits.session, now);
+    const bEff = getEffectiveLimit(b.usage.limits.session, now);
+    const aPct = aEff ? aEff.percentage : a.usage.limits.session.percentage;
+    const bPct = bEff ? bEff.percentage : b.usage.limits.session.percentage;
+    return aPct - bPct;
+  });
   return withSessionUsage[0].id;
 }
 
@@ -453,7 +467,7 @@ function renderFleetOverview(profiles) {
   let totalFree = 0;
 
   for (const p of withSession) {
-    const session = p.usage.limits.session;
+    const session = getEffectiveLimit(p.usage.limits.session, now) || p.usage.limits.session;
     const pct = session.percentage;
     totalFree += Math.max(0, 100 - pct);
 
@@ -622,7 +636,7 @@ const SESSION_LIMIT_KEYS = new Set(["session"]);
 function formatResetsIn(ms, key) {
   if (!ms) return "";
   const diff = ms - Date.now();
-  if (diff <= 0) return "resets soon";
+  if (diff <= 0) return "";
 
   const totalMinutes = Math.round(diff / 60000);
 
@@ -652,7 +666,8 @@ function formatResetsIn(ms, key) {
 // caps) gets its own row with a label, percentage, reset time, and its own
 // progress bar, so nothing is hidden behind a hover tooltip.
 function buildUsageDetail(usage) {
-  const entries = LIMIT_ORDER.map((key) => [key, usage.limits?.[key]]).filter(
+  const now = Date.now();
+  const entries = LIMIT_ORDER.map((key) => [key, getEffectiveLimit(usage.limits?.[key], now)]).filter(
     ([, v]) => v && typeof v.percentage === "number"
   );
   if (entries.length === 0) {
@@ -720,7 +735,8 @@ function buildUsageDetail(usage) {
 // rather than only the worst one with the rest tucked behind a hover
 // tooltip.
 function buildUsageCompact(usage) {
-  const entries = LIMIT_ORDER.map((key) => [key, usage.limits?.[key]])
+  const now = Date.now();
+  const entries = LIMIT_ORDER.map((key) => [key, getEffectiveLimit(usage.limits?.[key], now)])
     .filter(([, v]) => v && typeof v.percentage === "number")
     .map(([key, v]) => ({ key, ...v }));
   if (entries.length === 0) return null;
@@ -1404,3 +1420,31 @@ if (notificationsToggle) {
 
 loadNotificationsSettings();
 
+// ---------- Live UI countdown & auto-reset ticker ----------
+// Updates relative countdown phrasings (e.g. "resets in 5m" -> "resets in 4m")
+// every 30 seconds while the popup is open, and automatically triggers
+// loadProfiles() if any account's reset timestamp elapses so the UI flips
+// directly to 0% without needing to close and re-open the extension.
+setInterval(() => {
+  if (!lastProfiles) return;
+  const now = Date.now();
+  let hasExpired = false;
+
+  for (const p of Object.values(lastProfiles)) {
+    const limits = p.usage?.limits;
+    if (!limits) continue;
+    for (const lim of Object.values(limits)) {
+      if (lim && typeof lim.resetsAt === "number" && lim.resetsAt > 0 && lim.resetsAt <= now) {
+        hasExpired = true;
+        break;
+      }
+    }
+    if (hasExpired) break;
+  }
+
+  if (hasExpired) {
+    loadProfiles();
+  } else {
+    renderProfiles(lastProfiles, lastActiveId, searchInput ? searchInput.value : "");
+  }
+}, 30000);
