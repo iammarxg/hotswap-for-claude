@@ -33,6 +33,18 @@ def build_chrome(manifest):
     chrome_dist = os.path.join(DIST_DIR, "chrome")
     shutil.rmtree(chrome_dist, ignore_errors=True)
     shutil.copytree(EXTENSION_DIR, chrome_dist)
+
+    # The source manifest carries both MV3 background declarations so the
+    # unpacked extension works in Chromium and Firefox. Keep production
+    # archives browser-specific and free of ignored manifest keys.
+    chrome_manifest = json.loads(json.dumps(manifest))
+    chrome_manifest["background"] = {
+        "service_worker": "background.js",
+        "type": "module"
+    }
+
+    with open(os.path.join(chrome_dist, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(chrome_manifest, f, indent=2)
     
     if os.path.exists(os.path.join(SCRIPT_DIR, "LICENSE")):
         shutil.copy2(os.path.join(SCRIPT_DIR, "LICENSE"), os.path.join(chrome_dist, "LICENSE"))
@@ -62,7 +74,10 @@ def build_firefox(manifest):
         }
     }
     firefox_manifest["background"] = {
-        "scripts": ["background.js"]
+        "scripts": ["background.js"],
+        # background.js imports the exporter and ZIP builder. Without module
+        # mode Firefox rejects the first import, so the popup has no receiver.
+        "type": "module"
     }
     
     with open(os.path.join(firefox_dist, "manifest.json"), "w", encoding="utf-8") as f:

@@ -151,14 +151,14 @@
 
 html {
   width: 390px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 body {
   margin: 0;
   width: 390px;
   max-width: 390px;
-  overflow: hidden;
   font-family: var(--sans);
   font-size: 13px;
   color: var(--text);
@@ -364,6 +364,85 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* ---------- First-account onboarding ---------- */
+
+.first-account-onboarding {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.first-account-onboarding .eyebrow {
+  margin-bottom: -4px;
+}
+
+.first-account-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.first-account-step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.first-account-label {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.first-account-input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.first-account-input::placeholder {
+  color: var(--text-muted);
+}
+
+.first-account-input:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.first-account-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.first-account-divider::before,
+.first-account-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.first-account-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.45;
 }
 
 .hint {
@@ -1294,4 +1373,3 @@ body {
   border-color: var(--danger) !important;
   color: var(--danger);
 }
-

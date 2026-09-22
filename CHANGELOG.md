@@ -7,13 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.2.2] - 2026-09-22
 
-### 🎨 Design System & Theme Alignment
-- **Claude Design System Tokens**: Updated Claude Light and Claude Dark themes to match live Claude.ai CSS custom property tokens (`--cds-*`).
-- **Primary Blue CTA & Secondary Clay**: Aligned primary action buttons, active tab indicators, and focus outlines to Claude blue (`#2a78d6`), reserving brand clay (`#d97757`) for non-primary brand highlights like the header dot.
-- **Text & Surface Hierarchy**: Mapped `text-muted` (`#898781`) across hints, input placeholders, and disabled states; fixed dark mode best-account accent border contrast.
-- **Dual Selector Compatibility**: Added support for both extension `data-theme` and native Claude.ai `data-mode="light"` / `data-mode="dark"` attributes.
+### Added
+- Added a guided first-account flow for saving the current Claude login or opening a clean sign-in.
+
+### Changed
+- Aligned the Claude Light and Claude Dark theme tokens with the live Claude interface.
+
+### Fixed
+- Restored vertical scrolling in constrained Firefox popups.
+- Loaded the Firefox background script as an ES module so popup messages reach it.
 
 ---
 

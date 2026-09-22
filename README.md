@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <a href="https://chromewebstore.google.com/detail/hotswap-for-claude/nnpnmjhealgmnbinplmccegkecabcpdk"><img src="https://img.shields.io/badge/Chrome_Web_Store-v1.2.1-blue?logo=googlechrome&logoColor=white" alt="Chrome Web Store"></a>
-  <a href="https://addons.mozilla.org/en-US/firefox/addon/hotswap-for-claude/"><img src="https://img.shields.io/badge/Firefox_Add--ons-v1.2.1-orange?logo=firefoxbrowser&logoColor=white" alt="Firefox Add-ons"></a>
+  <a href="https://chromewebstore.google.com/detail/hotswap-for-claude/nnpnmjhealgmnbinplmccegkecabcpdk"><img src="https://img.shields.io/badge/Chrome_Web_Store-v1.2.2-blue?logo=googlechrome&logoColor=white" alt="Chrome Web Store"></a>
+  <a href="https://addons.mozilla.org/en-US/firefox/addon/hotswap-for-claude/"><img src="https://img.shields.io/badge/Firefox_Add--ons-v1.2.2-orange?logo=firefoxbrowser&logoColor=white" alt="Firefox Add-ons"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL_v3-green.svg" alt="License: AGPL v3"></a>
 </p>
 
@@ -56,8 +56,8 @@ Run the built-in packaging script (requires Python 3, zero dependencies):
 python package.py
 ```
 This builds ready-to-use ZIP archives in `dist/`:
-* `dist/hotswap-for-claude-chrome-v1.2.1.zip` (Chrome, Edge, Brave, Opera)
-* `dist/hotswap-for-claude-firefox-v1.2.1.zip` (Firefox)
+* `dist/hotswap-for-claude-chrome-v1.2.2.zip` (Chrome, Edge, Brave, Opera)
+* `dist/hotswap-for-claude-firefox-v1.2.2.zip` (Firefox)
 
 ### 2. Load Unpacked in Chrome / Chromium
 1. Open `chrome://extensions/` and enable **Developer mode** (top right toggle).

@@ -15,8 +15,9 @@ HotSwap for Claude is a privacy-first Manifest V3 browser extension that enables
 - **Account Color Tags & Pinning** *(v1.2.0)*: Per-profile color badge (8 swatches) and pin-to-top ordering
 - **Desktop Reset Notifications** *(v1.2.0)*: `chrome.notifications` OS alert when exhausted account's session quota resets
 - **Deterministic Quota Cooldown Reset** *(v1.2.1)*: Instant 0% normalization and live UI ticker eliminating hanging "resets soon"
+- **First-Account Onboarding** *(v1.2.2)*: Guided first-save flow for the current Claude login or a clean Claude sign-in
 
-## Current Version: `v1.2.1`
+## Current Version: `v1.2.2`
 
 ## Technical Architecture
 The extension operates across 4 execution realms with strict security boundaries:
@@ -96,7 +97,7 @@ This repository maintains a private monorepo with a clean public mirror for open
 - Host permissions limited to claude.ai and generativelanguage.googleapis.com domains
 
 ## Current Version
-v1.1.2
+v1.2.2
 
 ## Support
 - Website: https://hotswap.jeddah.dev

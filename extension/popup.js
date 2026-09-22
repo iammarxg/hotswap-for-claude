@@ -5,7 +5,6 @@ const listEl = document.getElementById("profile-list");
 const savedEyebrowEl = document.getElementById("saved-eyebrow");
 const currentSectionEl = document.getElementById("current-account-section");
 const currentListEl = currentSectionEl.querySelector(".profile-list-current");
-const emptyEl = document.getElementById("empty-state");
 const statusEl = document.getElementById("status");
 const labelInput = document.getElementById("new-label");
 const addBtn = document.getElementById("add-btn");
@@ -16,6 +15,10 @@ const warningBox = document.getElementById("warning-box");
 const searchSectionEl = document.getElementById("search-section");
 const savedAccountsSectionEl = document.getElementById("saved-accounts-section");
 const fleetOverviewEl = document.getElementById("fleet-overview");
+const firstAccountOnboardingEl = document.getElementById("first-account-onboarding");
+const firstAccountLabelInput = document.getElementById("first-account-label");
+const firstAccountSaveBtn = document.getElementById("first-account-save-btn");
+const firstAccountLoginBtn = document.getElementById("first-account-login-btn");
 
 // Theme selectors
 const themeQuickToggle = document.getElementById("theme-quick-toggle");
@@ -544,6 +547,22 @@ function renderProfiles(profiles, activeId, query = "") {
   // Render the fleet capacity overview bar
   renderFleetOverview(profiles);
 
+  const totalAccounts = entries.length;
+  const isFirstAccount = totalAccounts === 0;
+  firstAccountOnboardingEl.classList.toggle("hidden", !isFirstAccount);
+  searchSectionEl.classList.toggle("hidden", isFirstAccount);
+
+  if (isFirstAccount) {
+    currentSectionEl.classList.add("hidden");
+    savedAccountsSectionEl.classList.add("hidden");
+    addAccountPanel.classList.add("hidden");
+    warningBox.classList.add("hidden");
+    noMatchesEl.classList.add("hidden");
+    return;
+  }
+
+  searchSectionEl.classList.remove("hidden");
+
   // The active account gets its own distinctive card at the top of the
   // popup, pulled out of the regular saved-accounts list below it.
   const current = entries.find((profile) => profile.id === activeId);
@@ -568,7 +587,6 @@ function renderProfiles(profiles, activeId, query = "") {
       )
     : saved;
 
-  const totalAccounts = entries.length;
   const showSeparation = totalAccounts >= 2;
   if (searchSectionEl) {
     searchSectionEl.classList.toggle("panel-last", !showSeparation);
@@ -577,7 +595,6 @@ function renderProfiles(profiles, activeId, query = "") {
     savedAccountsSectionEl.classList.toggle("hidden", totalAccounts === 1 && saved.length === 0 && !q);
   }
 
-  emptyEl.classList.toggle("hidden", entries.length > 0);
   savedEyebrowEl.classList.toggle("hidden", saved.length === 0);
   noMatchesEl.classList.toggle("hidden", !(saved.length > 0 && q && visible.length === 0));
   if (saved.length > 0 && q && visible.length === 0) {
@@ -848,44 +865,62 @@ async function handleSwitch(profile) {
 // Safe way to make room for a new login: clears cookies locally without
 // ever calling claude.ai's logout endpoint, so no existing session gets
 // revoked. Opens a clean claude.ai tab for the user to log in.
-async function handleNewAccount() {
-  newAccountBtn.disabled = true;
+async function handleNewAccount(
+  button = newAccountBtn,
+  completionMessage = "Log in to the new account in the tab, then come back and click \"Add current account.\""
+) {
+  button.disabled = true;
   showStatus("Clearing local session (not logging out)…");
   const res = await sendMessage({ type: "PREPARE_NEW_ACCOUNT" });
-  newAccountBtn.disabled = false;
+  button.disabled = false;
   if (!res?.ok) {
     showStatus(res?.error || "Could not prepare a new session.", "error");
     return;
   }
-  showStatus(
-    "Log in to the new account in the tab, then come back and click \"Add current account.\"",
-    "success"
-  );
+  showStatus(completionMessage, "success");
   await loadProfiles();
 }
 
-async function handleAdd() {
-  const label = labelInput.value.trim();
+async function saveCurrentAccount(input, button, options = {}) {
+  const label = input.value.trim();
   if (!label) {
-    showStatus("Enter a label for this account first.", "error");
-    return;
+    showStatus(options.emptyLabelMessage || "Enter a label for this account first.", "error");
+    return false;
   }
-  addBtn.disabled = true;
+  button.disabled = true;
   showStatus("Saving current session…");
   const res = await sendMessage({ type: "ADD_CURRENT_ACCOUNT", label });
-  addBtn.disabled = false;
+  button.disabled = false;
   if (!res?.ok) {
+    const noSession = res?.error === "No claude.ai session found. Log in to claude.ai first.";
     showStatus(
-      res?.error ||
-        "Could not save this account. Make sure you're logged into claude.ai in this browser.",
+      noSession && options.noSessionMessage
+        ? options.noSessionMessage
+        : res?.error || "Could not save this account. Make sure you're logged into claude.ai in this browser.",
       "error"
     );
-    return;
+    return false;
   }
-  labelInput.value = "";
+  input.value = "";
+  return res.profile;
+}
+
+async function handleAdd() {
+  const profile = await saveCurrentAccount(labelInput, addBtn);
+  if (!profile) return;
   addAccountPanel.classList.add("hidden");
   warningBox.classList.add("hidden");
-  showStatus(`Saved "${res.profile.label}".`, "success");
+  showStatus(`Saved "${profile.label}".`, "success");
+  await loadProfiles();
+}
+
+async function handleFirstAccountSave() {
+  const profile = await saveCurrentAccount(firstAccountLabelInput, firstAccountSaveBtn, {
+    emptyLabelMessage: "Give your first account a name before saving it.",
+    noSessionMessage: "Sign in to Claude first, then reopen HotSwap to save this account.",
+  });
+  if (!profile) return;
+  showStatus(`Saved "${profile.label}".`, "success");
   await loadProfiles();
 }
 
@@ -1247,7 +1282,14 @@ async function handleRestoreFileSelected() {
 
 refreshAllBtn.addEventListener("click", handleRefreshAll);
 addBtn.addEventListener("click", handleAdd);
-newAccountBtn.addEventListener("click", handleNewAccount);
+newAccountBtn.addEventListener("click", () => handleNewAccount());
+firstAccountSaveBtn.addEventListener("click", handleFirstAccountSave);
+firstAccountLoginBtn.addEventListener("click", () => {
+  handleNewAccount(
+    firstAccountLoginBtn,
+    "Sign in to Claude in the tab, then reopen HotSwap and save your first account."
+  );
+});
 if (exportRawBtn) exportRawBtn.addEventListener("click", handleExportRaw);
 if (summarizeBtn) summarizeBtn.addEventListener("click", handleSummarize);
 if (copySummaryBtn) copySummaryBtn.addEventListener("click", handleCopySummary);
@@ -1257,6 +1299,9 @@ restoreBtn.addEventListener("click", handleRestoreClick);
 restoreFileInput.addEventListener("change", handleRestoreFileSelected);
 labelInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") handleAdd();
+});
+firstAccountLabelInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") handleFirstAccountSave();
 });
 
 searchInput.addEventListener("input", () => {

@@ -75,6 +75,44 @@
         </ul>
       </section>
 
+      <section
+        id="first-account-onboarding"
+        class="panel panel-last first-account-onboarding hidden"
+        aria-labelledby="first-account-title"
+      >
+        <p class="eyebrow">Welcome to HotSwap</p>
+        <h2 id="first-account-title" class="first-account-title">Save your first account</h2>
+        <p class="hint">
+          HotSwap keeps a local snapshot of your Claude session, so you can switch accounts without signing out.
+        </p>
+
+        <div class="first-account-step">
+          <label for="first-account-label" class="first-account-label">Name this account</label>
+          <input
+            id="first-account-label"
+            class="first-account-input"
+            type="text"
+            placeholder="Work, Personal…"
+            maxlength="40"
+          />
+          <button id="first-account-save-btn" class="btn btn-primary" type="button">
+            Save current account
+          </button>
+        </div>
+
+        <div class="first-account-divider" aria-hidden="true">or</div>
+
+        <div class="first-account-step">
+          <p class="first-account-label">Not signed in to Claude?</p>
+          <button id="first-account-login-btn" class="btn btn-ghost" type="button">
+            Sign in to Claude
+          </button>
+          <p class="first-account-note">
+            This clears local Claude cookies only; it never logs out or revokes an account. After signing in, reopen HotSwap and save the account above.
+          </p>
+        </div>
+      </section>
+
       <section id="search-section" class="panel panel-tight">
         <div class="search-row">
           <input
@@ -123,10 +161,6 @@
       <section id="saved-accounts-section" class="panel">
         <p id="saved-eyebrow" class="eyebrow hidden">Saved accounts</p>
         <ul id="profile-list" class="profile-list"></ul>
-
-        <p id="empty-state" class="empty-state hidden">
-          No accounts saved yet — log in to claude.ai, then add it below.
-        </p>
         <p id="no-matches" class="empty-state hidden">
           No accounts match "<span id="no-matches-query"></span>".
         </p>
