@@ -1,5 +1,8 @@
+import { getGeminiApiKey, getGeminiKeyStatus, saveGeminiApiKey, clearGeminiApiKey } from "./secret-vault.js";
+import { rememberExportLocation } from "./export-location.js";
 import { exportClaudeConversationInPage } from "./export-page-script.js";
 import { SimpleZip } from "./zip-builder.js";
+import { ENCRYPTED_BACKUP_KIND, encryptBackup, decryptBackup } from "./backup-crypto.js";
 
 // ---------- Free Plan SSE Usage Cache & Monotonic Fallback ----------
 const SSE_USAGE_KEY = "hotswap_sse_usage";
@@ -508,7 +511,6 @@ async function addCurrentAccount(label) {
     label: label?.trim() || "Untitled account",
     email: email || null,
     usage: null,
-    color: null,
     cookies,
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -632,15 +634,6 @@ async function renameProfile(profileId, newLabel) {
   await saveProfiles(profiles);
 }
 
-// Custom color tag — purely cosmetic, doesn't touch updatedAt so it
-// doesn't reshuffle the list's sort order just from re-coloring a badge.
-async function setProfileColor(profileId, color) {
-  const profiles = await getProfiles();
-  if (!profiles[profileId]) throw new Error("Profile not found.");
-  profiles[profileId].color = color || null;
-  await saveProfiles(profiles);
-}
-
 // Pin a profile to the top of the accounts list — purely cosmetic ordering,
 // doesn't touch updatedAt so it doesn't interfere with usage-based sort.
 async function pinProfile(profileId, pinned) {
@@ -710,10 +703,9 @@ async function checkActiveSessionHealth() {
 // to a different machine entirely), independent of doing the update the
 // "right" way.
 
-// The exported file contains raw session cookies — functionally as
-// sensitive as a password. It's written to the user's own Downloads
-// folder only; nothing is sent anywhere.
-async function exportProfilesBackup() {
+// Only encrypted JSON is downloaded. The password and decrypted profile data
+// remain transient; they are never written to storage or sent to a server.
+async function exportProfilesBackup(password) {
   const profiles = await getProfiles();
   const list = Object.values(profiles);
   if (list.length === 0) {
@@ -724,13 +716,12 @@ async function exportProfilesBackup() {
     kind: "hotswap-for-claude-backup",
     exportedAt: new Date().toISOString(),
     extensionVersion: chrome.runtime.getManifest().version,
-    warning:
-      "This file contains raw session cookies for your saved accounts — treat it like a password. Delete it once you've restored from it.",
     profiles: list,
   };
 
-  const json = JSON.stringify(backup, null, 2);
-  const filename = `hotswap-for-claude-backup-${Date.now()}.json`;
+  const encrypted = await encryptBackup(backup, password);
+  const json = JSON.stringify(encrypted, null, 2);
+  const filename = `hotswap-for-claude-backup-encrypted-${Date.now()}.json`;
   const dataUrl = "data:application/json;charset=utf-8," + encodeURIComponent(json);
   const downloadId = await chrome.downloads.download({ url: dataUrl, filename, saveAs: false });
   const settled = await waitForDownloadSettled(downloadId);
@@ -745,8 +736,11 @@ async function exportProfilesBackup() {
 // replacing it outright, so restoring doesn't clobber accounts added since
 // the backup was taken. Imported profiles get fresh IDs so they can't
 // collide with (or silently overwrite) anything already saved.
-async function importProfilesBackup(backupData) {
-  if (!backupData || !Array.isArray(backupData.profiles)) {
+async function importProfilesBackup(backupData, password) {
+  if (backupData?.kind === ENCRYPTED_BACKUP_KIND) {
+    backupData = await decryptBackup(backupData, password);
+  }
+  if (backupData?.kind !== "hotswap-for-claude-backup" || !Array.isArray(backupData.profiles)) {
     throw new Error("This doesn't look like a valid HotSwap for Claude backup file.");
   }
 
@@ -1076,6 +1070,7 @@ function ensureExtension(filename, url, type) {
 function waitForDownloadSettled(downloadId, timeoutMs = 15000) {
   return new Promise((resolve) => {
     let settled = false;
+    let timer;
     const finish = (result) => {
       if (settled) return;
       settled = true;
@@ -1091,13 +1086,13 @@ function waitForDownloadSettled(downloadId, timeoutMs = 15000) {
       }
     };
     chrome.downloads.onChanged.addListener(onChanged);
+    timer = setTimeout(() => finish({ ok: false, error: "timed_out" }), timeoutMs);
     chrome.downloads.search({ id: downloadId }, (items) => {
       const item = items?.[0];
       if (!item) return;
       if (item.state === "complete") finish({ ok: true });
       else if (item.state === "interrupted") finish({ ok: false, error: item.error || "interrupted" });
     });
-    const timer = setTimeout(() => finish({ ok: false, error: "timed_out" }), timeoutMs);
   });
 }
 
@@ -1416,7 +1411,7 @@ async function exportActiveChat(options = {}, onProgress = () => {}) {
       }
     }
 
-    onProgress("Saving ZIP archive to Downloads…");
+    onProgress("Saving ZIP archive…");
 
     // Trigger one single download for the entire ZIP bundle
     const zipDataUrl = zip.toDataUrl();
@@ -1432,6 +1427,11 @@ async function exportActiveChat(options = {}, onProgress = () => {}) {
       throw new Error(`The export zip bundle failed to save (${settled.error}).`);
     }
 
+    // Read the actual final filename, including custom folders and conflict renames.
+    // A browser history/storage failure must not turn an already saved export into a failure.
+    let exportLocation = null;
+    try { exportLocation = await rememberExportLocation(downloadId); } catch {}
+
     // Cooldown window: catch and cancel any delayed async signing tasks from Claude (e.g. h(Ij))
     await new Promise((r) => setTimeout(r, 4000));
 
@@ -1440,6 +1440,8 @@ async function exportActiveChat(options = {}, onProgress = () => {}) {
       title: injectionResult.title,
       folder: parentFolder,
       filename: zipFilename,
+      absolutePath: exportLocation?.path || null,
+      directory: exportLocation?.directory || null,
       attachmentsSaved,
       attachmentsFailed,
     };
@@ -1472,8 +1474,7 @@ async function summarizeChatWithGemini(options = {}) {
     );
   }
 
-  const stored = await chrome.storage.local.get("geminiApiKey");
-  const apiKey = (stored.geminiApiKey || "").trim();
+  const apiKey = await getGeminiApiKey();
   if (!apiKey) {
     throw new Error("NO_API_KEY");
   }
@@ -1546,11 +1547,11 @@ Structure your summary using the following markdown sections:
 --- CONVERSATION TRANSCRIPT (${messages.length} turns) ---
 ${convText}${fileSection}`;
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent`;
 
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { maxOutputTokens: 2500, temperature: 0.2 },
@@ -1561,7 +1562,7 @@ ${convText}${fileSection}`;
     let errMsg = `HTTP ${response.status}`;
     try {
       const errBody = await response.json();
-      errMsg = errBody?.error?.message || errMsg;
+      errMsg = String(errBody?.error?.message || errMsg).replaceAll(apiKey, "[redacted]");
     } catch {}
     if (response.status === 400 && errMsg.toLowerCase().includes("api key")) {
       throw new Error("Invalid Gemini API key. Please check the key in Settings.");
@@ -1626,6 +1627,10 @@ chrome.commands.onCommand.addListener(async (command) => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
+      if (["GET_GEMINI_KEY_STATUS", "SAVE_GEMINI_KEY", "CLEAR_GEMINI_KEY"].includes(message.type) &&
+          (_sender.tab || _sender.id !== chrome.runtime.id)) {
+        throw new Error("API key settings are available only inside the extension.");
+      }
       switch (message.type) {
         case "SSE_USAGE_UPDATE": {
           await storeSseUsage(message.orgId, message.sseLimits);
@@ -1675,11 +1680,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           sendResponse({ ok: true });
           break;
         }
-        case "SET_PROFILE_COLOR": {
-          await setProfileColor(message.profileId, message.color);
-          sendResponse({ ok: true });
-          break;
-        }
         case "REFRESH_USAGE": {
           try {
             const usage = await getUsageForProfile(message.profileId);
@@ -1719,13 +1719,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           break;
         }
         case "EXPORT_BACKUP": {
-          const info = await exportProfilesBackup();
+          const info = await exportProfilesBackup(message.password);
           sendResponse({ ok: true, ...info });
           break;
         }
         case "IMPORT_BACKUP": {
-          const info = await importProfilesBackup(message.backupData);
+          const info = await importProfilesBackup(message.backupData, message.password);
           sendResponse({ ok: true, ...info });
+          break;
+        }
+        case "GET_GEMINI_KEY_STATUS": {
+          sendResponse({ ok: true, ...await getGeminiKeyStatus() });
+          break;
+        }
+        case "SAVE_GEMINI_KEY": {
+          sendResponse({ ok: true, ...await saveGeminiApiKey(message.apiKey) });
+          break;
+        }
+        case "CLEAR_GEMINI_KEY": {
+          sendResponse({ ok: true, ...await clearGeminiApiKey() });
           break;
         }
         case "SUMMARIZE_CHAT": {
@@ -1821,3 +1833,6 @@ chrome.runtime.onConnect.addListener((port) => {
     });
   }
 });
+
+// Resume legacy-key migration automatically whenever the worker starts.
+getGeminiKeyStatus().catch(() => console.warn("Secure API key storage needs attention in Settings."));

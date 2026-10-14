@@ -1,74 +1,75 @@
 # HotSwap for Claude
 
-<p align="center">
-  <img src="assets/icon.png" width="96" height="96" alt="HotSwap for Claude Logo">
-</p>
+**Switch Claude accounts. Keep your flow.**
 
-<p align="center">
-  <a href="https://chromewebstore.google.com/detail/hotswap-for-claude/nnpnmjhealgmnbinplmccegkecabcpdk"><img src="https://img.shields.io/badge/Chrome_Web_Store-v1.2.2-blue?logo=googlechrome&logoColor=white" alt="Chrome Web Store"></a>
-  <a href="https://addons.mozilla.org/en-US/firefox/addon/hotswap-for-claude/"><img src="https://img.shields.io/badge/Firefox_Add--ons-v1.2.2-orange?logo=firefoxbrowser&logoColor=white" alt="Firefox Add-ons"></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL_v3-green.svg" alt="License: AGPL v3"></a>
-</p>
+Save your accounts, see their usage, and bring useful context into your next chat—all from one browser extension.
 
-<p align="center">
-  <strong>Fast, privacy-first browser extension for seamlessly hot-swapping between multiple Claude.ai accounts, monitoring real-time usage limits, keeping background sessions active, and exporting & summarizing conversations.</strong>
-</p>
+[![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Install-blue?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/hotswap-for-claude/nnpnmjhealgmnbinplmccegkecabcpdk)
+[![Firefox Add-ons](https://img.shields.io/badge/Firefox_Add--ons-Install-orange?logo=firefoxbrowser&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/hotswap-for-claude/)
 
-<p align="center">
-  🌐 <a href="https://hotswap.jeddah.dev">hotswap.jeddah.dev</a> • 💬 <a href="mailto:support@jeddah.dev">support@jeddah.dev</a>
-</p>
+![HotSwap account cards with switching arrows](assets/screenshot_overview.png)
 
----
+## What you can do
 
-## 📸 Showcase
+- **Switch and organize accounts.** Save, rename, search, and pin your Claude logins. Switch in a click, cycle with shortcuts, or quick-switch to the account with the most available session quota in the latest usage data.
+- **See usage and reset times.** Check session, weekly, and model limits where Claude provides them. Refresh one account or all of them, and get a desktop alert when an exhausted session resets.
+- **Keep accounts ready.** Choose background refresh every 4, 8, 12, 24, or 48 hours. Expired or revoked logins may still need you to sign in again.
+- **Export your conversation.** Download a ZIP with a Markdown transcript, thinking, and optional images, code, artifacts, and attachments. The save confirmation shows the actual full file path. Raw exports need no AI API key.
+- **Create a Gemini handoff.** Preview and copy a summary for your next chat using your own API key, encrypted locally. Summaries send selected conversation content and optional file/code context to Google; Google's terms and charges apply.
+- **Back up with a password.** Create encrypted account backups with a confirmed password of at least 4 characters. Restore encrypted files or older unencrypted backups. HotSwap never saves or recovers the backup password.
+- **Choose your theme.** Use Midnight, Claude Light, or Claude Dark.
 
-<p align="center">
-  <img src="assets/screenshot_overview.png" alt="HotSwap for Claude Overview" width="90%">
-</p>
+Each Claude account keeps its own plan and limits. Switching does not move the original conversation; export or summarize its context and bring it into a new chat yourself.
 
-| Accounts & Quota Tracker | Two-Tier Exporter & Summarizer | Session Keep-Alive & Themes |
-| :---: | :---: | :---: |
-| <img src="assets/screenshot_accounts.png" width="100%" alt="Accounts & Quota Tracker"> | <img src="assets/screenshot_tools.png" width="100%" alt="Chat Exporter"> | <img src="assets/screenshot_settings.png" width="100%" alt="Settings & Themes"> |
+## Get started
 
----
+1. Sign in to Claude, open HotSwap, and save your current account with a label you recognize.
+2. Choose **Start new account**, sign in to another account, and save it too.
+3. Click a saved account or use a shortcut. Check usage in **Accounts**, export or summarize in **Tools**, and manage preferences in **Settings**.
 
-## 🔥 Key Features
+Default shortcuts: **Alt + Shift + → / ←** to cycle, and **Alt + Shift + 1** to quick-switch. On Mac, use **Option** in place of Alt. Customize shortcuts in your browser.
 
-* **⚡ Instant Hot-Swapping**: Switch between saved Claude accounts in a single click or keystroke (`Alt+Shift+1` or `Alt+Shift+Arrows`).
-* **🎨 Unified Theme Engine (3 Curated Palettes)**: Switch seamlessly between **Midnight** (signature high-contrast dark), **Claude Light** (native Claude.ai light mode), and **Claude Dark** (authentic Claude.ai dark mode with blue & clay accents).
-* **🤖 Universal Gemini AI Context Handoff Summarizer**: Direct integration with Google's `gemini-3.5-flash-lite` generating high-density handoff markdown briefs (core objectives, tools, explicit user exclusions & preferences, decisions, deliverables, next steps) copied straight to clipboard with **zero file download overhead**.
-* **📦 Lossless Raw Chat & Thought Exporter**: Traverses virtualized chat DOM without truncation, auto-captures Claude 3.7 / extended reasoning streams, deduplicates attachments, and bundles everything into a clean `.zip` archive.
-* **🔒 Safe Local Session Swapping**: Swaps local browser cookies without triggering server-side logouts—all your accounts stay logged in simultaneously.
-* **📊 Direct Quota & Reset Timers**: Real-time visibility into your 5-hour session limits and 7-day weekly caps across Free and Paid plans.
-* **🔄 Session Keep-Alive**: Automatically exercises saved background sessions at custom intervals (default: 12h) to prevent cookie expiration.
-* **🛡️ 100% Local-First & Private**: All session tokens and API keys are stored strictly in `chrome.storage.local`. Zero analytics, zero third-party telemetry.
-* **⚡ Fleet Capacity Overview**: Compact aggregate bar shows how many accounts are ready / limited / exhausted with a live reset countdown — visible when 2+ accounts have session data.
-* **🏷️ Account Color Tags & Pinning**: Assign a color badge to any account for visual scanning, and pin your most-used accounts to the top of the list.
-* **🔔 Desktop Reset Notifications**: OS-level alert fires automatically when an exhausted account's 5-hour quota resets — no need to check manually.
+## Take a look inside
 
----
+### Accounts and usage
 
-## 🛠️ Build & Install from Source
+![Saved accounts, usage limits, pinning, and switching](assets/screenshot_accounts.png)
 
-### 1. Automated Packaging
-Run the built-in packaging script (requires Python 3, zero dependencies):
-```bash
+### Conversation exports
+
+![Chat export controls and the contents of an exported ZIP](assets/screenshot_tools.png)
+
+### Themes and encrypted backups
+
+![Three themes and the password-protected backup flow](assets/screenshot_settings.png)
+
+## Privacy
+
+Saved accounts and settings stay in your browser. Your saved Gemini key is encrypted with a browser-managed key and unlocks automatically in the background. Optional summaries communicate directly with Google; account and usage requests go directly to Claude. The extension has no analytics or tracking.
+
+Account backups contain sensitive login data. Keep the encrypted file and its password safe. Local encryption does not protect against someone with control of your browser profile or device.
+
+[Privacy & Data](https://hotswap.jeddah.dev/privacy)
+
+## Build and load locally
+
+Run the dependency-free packager with Python:
+
+```sh
 python package.py
 ```
-This builds ready-to-use ZIP archives in `dist/`:
-* `dist/hotswap-for-claude-chrome-v1.2.2.zip` (Chrome, Edge, Brave, Opera)
-* `dist/hotswap-for-claude-firefox-v1.2.2.zip` (Firefox)
 
-### 2. Load Unpacked in Chrome / Chromium
-1. Open `chrome://extensions/` and enable **Developer mode** (top right toggle).
-2. Click **Load unpacked** and select the `extension/` folder.
+It creates browser-specific ZIPs and unpacked folders in `dist/`.
 
-### 3. Load Temporary in Firefox
-1. Open `about:debugging#/runtime/this-firefox`.
-2. Click **Load Temporary Add-on…** and select `extension/manifest.json`.
+- **Chrome / Chromium:** open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `dist/chrome/`.
+- **Firefox:** open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and select `dist/firefox/manifest.json`.
 
----
+Ready-made packages and their changelog are available on the [GitHub Releases page](https://github.com/iammarxg/hotswap-for-claude/releases/latest).
 
-## 📜 License
+## Help and license
 
-This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0-only)**. See [LICENSE](./LICENSE) for details.
+[Website](https://hotswap.jeddah.dev) · [Support](https://hotswap.jeddah.dev/#support) · [Email](mailto:support@jeddah.dev) · [Report an issue](https://github.com/iammarxg/hotswap-for-claude/issues)
+
+Licensed under the [GNU Affero General Public License](LICENSE).
+
+HotSwap for Claude is an independent project, not affiliated with, endorsed by, or sponsored by Anthropic.

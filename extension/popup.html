@@ -65,9 +65,6 @@
     </div>
 
     <div id="tab-panel-accounts" class="tab-panel" data-tab="accounts" role="tabpanel">
-      <!-- Fleet Capacity Overview — shown when ≥2 accounts have session usage data -->
-      <div id="fleet-overview" class="fleet-overview hidden"></div>
-
       <section id="current-account-section" class="panel panel-tight-bottom hidden">
         <h2 class="eyebrow">Current account</h2>
         <ul class="profile-list profile-list-current">
@@ -310,8 +307,8 @@
         <h2 class="eyebrow">🤖 AI Summarizer</h2>
         <div class="panel-body">
           <p class="hint">
-            Your Gemini API key is used locally to generate conversation summaries.
-            It never leaves your browser — sent only to Google's Gemini API.
+            Your API key is encrypted in this browser. Summarizing sends your key
+            and selected conversation content directly to Google's Gemini API.
           </p>
           <div class="gemini-key-row">
             <input
@@ -339,10 +336,10 @@
         <h2 class="eyebrow">Export save location</h2>
         <div class="panel-body">
           <p class="hint">
-            Chat backup archives are saved to your browser's default downloads directory:
+            Last successful export:
           </p>
           <p class="export-preview-path">
-            <code>Downloads/HotSwap-Claude-Exports/</code>
+            <code id="export-save-location">Export a chat to detect the full save location.</code>
           </p>
         </div>
       </section>
@@ -358,17 +355,40 @@
       </section>
 
       <section class="panel panel-last">
-        <h2 class="eyebrow">Backup</h2>
+        <h2 class="eyebrow">Encrypted backups</h2>
         <div class="panel-body">
           <p class="hint">
-            Updating shouldn't wipe saved accounts, but keep a backup in case —
-            it holds raw session data, so keep it private.
+            Save your accounts in a password-protected file. Older unencrypted
+            backups can still be restored.
           </p>
           <div class="btn-row">
-            <button id="backup-btn" class="btn btn-primary">Download backup</button>
-            <button id="restore-btn" class="btn btn-ghost">Restore from backup</button>
-            <input id="restore-file-input" type="file" accept="application/json" class="hidden" />
+            <button id="backup-btn" class="btn btn-primary" type="button">Create encrypted backup</button>
+            <button id="restore-btn" class="btn btn-ghost" type="button">Restore backup</button>
+            <input id="restore-file-input" type="file" accept=".json,application/json" class="hidden" />
           </div>
+          <form id="backup-create-form" class="backup-form hidden">
+            <label for="backup-password">Backup password
+              <input id="backup-password" type="password" autocomplete="new-password" maxlength="1024" required />
+            </label>
+            <label for="backup-password-confirm">Confirm password
+              <input id="backup-password-confirm" type="password" autocomplete="new-password" maxlength="1024" required />
+            </label>
+            <p class="hint">Use at least 4 characters. HotSwap does not save this password and cannot recover it.</p>
+            <div class="btn-row">
+              <button id="backup-save-btn" class="btn btn-primary" type="submit">Encrypt &amp; download</button>
+              <button id="backup-cancel-btn" class="btn btn-ghost" type="button">Cancel</button>
+            </div>
+          </form>
+          <form id="backup-unlock-form" class="backup-form hidden">
+            <label for="backup-unlock-password">Password for this backup
+              <input id="backup-unlock-password" type="password" autocomplete="off" maxlength="1024" required />
+            </label>
+            <div class="btn-row">
+              <button id="backup-unlock-btn" class="btn btn-primary" type="submit">Unlock &amp; restore</button>
+              <button id="backup-unlock-cancel-btn" class="btn btn-ghost" type="button">Cancel</button>
+            </div>
+          </form>
+          <p id="backup-status" class="backup-feedback" role="status" aria-live="polite"></p>
         </div>
       </section>
     </div>

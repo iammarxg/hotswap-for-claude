@@ -10,14 +10,14 @@ HotSwap for Claude is a privacy-first Manifest V3 browser extension that enables
 - **Unified Theme Engine**: Three curated palettes (Midnight, Claude Light, Claude Dark) with zero-flash bootstrap
 - **Gemini AI Summarizer**: Context handoff summaries using gemini-3.5-flash-lite copied to clipboard
 - **Lossless Chat Exporter**: ZIP archives with full conversation transcript, thoughts, and attachments
-- **Privacy-First**: All data stored exclusively in chrome.storage.local - zero telemetry or external dependencies
-- **Fleet Capacity Overview** *(v1.2.0)*: Aggregate accounts bar showing ready/limited/exhausted counts with reset countdown
-- **Account Color Tags & Pinning** *(v1.2.0)*: Per-profile color badge (8 swatches) and pin-to-top ordering
+- **Encrypted Account Backups**: `backup-crypto.js` encrypts new JSON exports with AES-256-GCM and PBKDF2-SHA-256; restore accepts encrypted files and legacy plaintext backups. Backup passwords remain transient. See `src/BACKUPS.md` when changing the format or backup flows.
+- **Privacy-First**: Saved sessions and settings use browser-local storage with zero telemetry; optional Gemini summaries send selected conversation content directly to Google. Account backup exports are encrypted locally.
+- **Account Pinning**: Pin-to-top ordering for frequently used accounts.
 - **Desktop Reset Notifications** *(v1.2.0)*: `chrome.notifications` OS alert when exhausted account's session quota resets
 - **Deterministic Quota Cooldown Reset** *(v1.2.1)*: Instant 0% normalization and live UI ticker eliminating hanging "resets soon"
 - **First-Account Onboarding** *(v1.2.2)*: Guided first-save flow for the current Claude login or a clean Claude sign-in
 
-## Current Version: `v1.2.2`
+## Current Version: `v1.3.0`
 
 ## Technical Architecture
 The extension operates across 4 execution realms with strict security boundaries:
@@ -48,8 +48,10 @@ The extension operates across 4 execution realms with strict security boundaries
 - Public extension files: `extension/` directory (clean public mirror)
 - Build command: `python package.py` (creates distributable ZIPs in `dist/`)
 - Store assets command: `python scripts/package.py` (populates `store-assets/v{version}/` with archives, icons, and screenshots)
+- **Store-assets release invariant**: Every version bump or release must refresh `store-assets/v{version}/`. Run the store-assets packager after updating the manifest, then verify the folder contains the three versioned ZIPs plus the current icons, promo images, and screenshots. Never leave store assets pointing at an older version.
 - Load unpacked: Select `dist/chrome` or `extension/` folder in chrome://extensions
-- Publishing: `python scripts/publish_release.py` (creates clean public mirror - always includes CHANGELOG.md)
+- Local release preparation: `python scripts/publish_release.py --prepare` (audits public files and builds packages/notes; never pushes). Preserve intentional `extension/` vs `src/` differences.
+- Current user instruction: wait for user testing and an explicit “push” before pushing commits/tags, triggering Actions or publishing.
 
 ## Release Guidelines
 - **Changelog Attachment**: Every public GitHub release **must** include the CHANGELOG.md file
@@ -70,7 +72,7 @@ This repository maintains a private monorepo with a clean public mirror for open
 - **Local/Private**: All files including `src/`, `scripts/`, `website/`, `store-assets/`, `MEMORY.md`, `ROADMAP.md` are kept in the private repository
 - **Public Mirror**: Only the extension source (`extension/`), assets, `package.py`, `README.md`, `CHANGELOG.md`, and `.github/workflows/` are published to GitHub
 - Files **NOT** to push to public git: `src/`, `scripts/`, `website/`, `store-assets/`, `MEMORY.md`, `ROADMAP.md`, internal development branches
-- The `scripts/publish_release.py` script creates a clean export mirror that excludes internal files
+- The `scripts/publish_release.py` script audits the public file allowlist and prepares packages without changing Git history or copying private source over the public runtime.
 
 ## Git Workflow Requirements
 - **Private Git**: Frequent commits and pushes to the private repository are **strongly encouraged** to track changes, enable easy rollback of breaking changes, and maintain proper version history
@@ -89,15 +91,16 @@ This repository maintains a private monorepo with a clean public mirror for open
 - `CHANGELOG.md`: Release notes - **always attached to public GitHub releases**
 
 ## Security & Privacy Guarantees
-- Zero external telemetry - all data remains in chrome.storage.local
-- Local session isolation - tokens never leave browser storage
+- Zero analytics or tracking telemetry; saved sessions/settings use chrome.storage.local; Gemini keys use the background-only encrypted IndexedDB vault (`secret-vault.js`).
+- The vault atomically stores AES-256-GCM ciphertext with a non-exportable browser key, serializes mutations, and migrates legacy plaintext keys after verifying the committed record. Popup responses contain configured status only.
+- Local backup encryption; passwords are transient, and session requests go directly to Claude
 - No credential logging - direct browser-to-claude.ai exchanges only
 - CSP-compliant popup (no inline scripts)
 - Minimal required permissions: cookies, storage, tabs, scripting, downloads, alarms
 - Host permissions limited to claude.ai and generativelanguage.googleapis.com domains
 
 ## Current Version
-v1.2.2
+v1.3.0
 
 ## Support
 - Website: https://hotswap.jeddah.dev

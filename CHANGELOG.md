@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.3.0] - 2026-10-15
+
+### Added
+- Encrypted Gemini API key storage in the background using AES-256-GCM and a non-exportable browser key. Existing keys migrate automatically; atomic IndexedDB writes preserve saved credentials across interrupted writes and browser restarts.
+- Added password-protected account backups using local AES-256-GCM encryption and PBKDF2-SHA-256 key derivation. Backup creation requires a confirmed password of at least 4 characters; HotSwap never saves it.
+- Added password-based restore for encrypted backups while retaining support for older unencrypted JSON backups. Wrong passwords or damaged encrypted files leave existing accounts untouched.
+
+### Removed
+- Removed the Fleet summary and its misleading exhaustion status from the Accounts tab.
+- Removed account color tags, the color picker, and avatar tinting; account pinning remains available.
+
+### Changed
+- Rewrote the README around current features with refreshed images and version-neutral links. Added Firefox listing screenshots and separate browser store asset kits.
+- Redesigned both promo images with flat account cards and switching arrows. Refreshed the store description to cover current features in under one minute of reading, including optional Gemini handoffs and their data sharing.
+- GitHub Actions releases now validate tags against the extension manifest and attach release-specific notes and the full changelog. Manual workflow runs build without publishing.
+- Simplified Accounts while preserving existing per-account percentages, progress bars, usage colors, and reset countdowns.
+- Made store images reusable across releases by removing visible version labels, and updated the example accounts to show Claude Free and Claude Pro.
+
+### Fixed
+- Settings now shows the complete directory from the last successful chat export, including custom download locations. Export confirmation uses the browser's actual final filename.
+- Gemini authentication now uses the API key request header rather than including the key in the URL.
+- Fixed lowercase plan names on saved accounts. Current and saved accounts now use the same plan-name formatting, including Max multipliers, without capitalizing the usage timestamp.
+
+---
+
 ## [v1.2.2] - 2026-09-22
 
 ### Added

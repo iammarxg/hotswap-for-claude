@@ -1,3 +1,5 @@
+import { ENCRYPTED_BACKUP_KIND, MAX_BACKUP_FILE_BYTES, validateBackupPassword } from "./backup-crypto.js";
+
 // popup.js — no inline scripts (CSP-compliant), talks to background.js
 // via chrome.runtime.sendMessage.
 
@@ -14,7 +16,6 @@ const addAccountPanel = document.getElementById("add-account-panel");
 const warningBox = document.getElementById("warning-box");
 const searchSectionEl = document.getElementById("search-section");
 const savedAccountsSectionEl = document.getElementById("saved-accounts-section");
-const fleetOverviewEl = document.getElementById("fleet-overview");
 const firstAccountOnboardingEl = document.getElementById("first-account-onboarding");
 const firstAccountLabelInput = document.getElementById("first-account-label");
 const firstAccountSaveBtn = document.getElementById("first-account-save-btn");
@@ -233,19 +234,6 @@ function sortedEntries(profiles) {
   return [...pinned, ...rest];
 }
 
-// 8-color palette for account tagging. Values chosen to be visually distinct
-// across all three themes (Midnight / Claude Light / Claude Dark).
-const ACCOUNT_COLORS = [
-  { hex: "#ef4444", label: "Red" },
-  { hex: "#f97316", label: "Orange" },
-  { hex: "#eab308", label: "Yellow" },
-  { hex: "#22c55e", label: "Green" },
-  { hex: "#3b82f6", label: "Blue" },
-  { hex: "#a855f7", label: "Purple" },
-  { hex: "#ec4899", label: "Pink" },
-  { hex: "#6b7280", label: "Gray" },
-];
-
 // Builds the shared contents of a profile row — used for both the
 // current-account card and each saved-account list item.
 function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } = {}) {
@@ -268,25 +256,13 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
     main.appendChild(bestBadge);
   }
 
-  // Avatar with optional color dot overlay
+  // Account avatar
   const avatarWrap = document.createElement("div");
   avatarWrap.className = "avatar-wrap";
 
   const avatar = document.createElement("div");
   avatar.className = "avatar";
   avatar.textContent = initialsFor(profile.label);
-  // Tint avatar background when a color tag is set
-  if (profile.color) {
-    avatar.style.background = profile.color + "33"; // 20% opacity tint
-    avatar.style.color = profile.color;
-    avatar.style.borderColor = profile.color + "66";
-
-    const colorDot = document.createElement("span");
-    colorDot.className = "avatar-color-dot";
-    colorDot.style.background = profile.color;
-    colorDot.title = `Color tag — click 🎨 to change`;
-    avatarWrap.appendChild(colorDot);
-  }
   avatarWrap.appendChild(avatar);
 
   const labelWrap = document.createElement("div");
@@ -370,22 +346,7 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
     handleRefreshUsage(profile);
   });
 
-  // Color tag button (palette picker toggle) — not shown for the current account card
   if (!isCurrent) {
-    const colorBtn = document.createElement("button");
-    colorBtn.className = "icon-btn";
-    colorBtn.title = "Set color tag";
-    colorBtn.textContent = "🎨";
-    colorBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const existing = li.querySelector(".color-picker-strip");
-      if (existing) {
-        existing.remove();
-        return;
-      }
-      li.appendChild(buildColorPicker(profile));
-    });
-
     const pinBtn = document.createElement("button");
     pinBtn.className = "icon-btn" + (profile.pinned ? " pin-btn-active" : "");
     pinBtn.title = profile.pinned ? "Unpin" : "Pin to top";
@@ -396,7 +357,6 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
     });
 
     actions.appendChild(pinBtn);
-    actions.appendChild(colorBtn);
   }
 
   actions.appendChild(refreshBtn);
@@ -413,129 +373,6 @@ function buildProfileItem(profile, { activeId, isQuickSwitchTarget, isCurrent } 
   return li;
 }
 
-// Builds an inline color-picker strip that appears below a profile item.
-// Clicking a swatch calls SET_PROFILE_COLOR then refreshes the list.
-function buildColorPicker(profile) {
-  const strip = document.createElement("div");
-  strip.className = "color-picker-strip";
-  strip.addEventListener("click", (e) => e.stopPropagation());
-
-  for (const { hex, label } of ACCOUNT_COLORS) {
-    const swatch = document.createElement("button");
-    swatch.className = "color-swatch" + (profile.color === hex ? " color-swatch-active" : "");
-    swatch.title = label;
-    swatch.style.background = hex;
-    swatch.addEventListener("click", (e) => {
-      e.stopPropagation();
-      handleSetColor(profile, hex);
-    });
-    strip.appendChild(swatch);
-  }
-
-  // "Clear" swatch
-  const clearSwatch = document.createElement("button");
-  clearSwatch.className = "color-swatch color-swatch-clear" + (!profile.color ? " color-swatch-active" : "");
-  clearSwatch.title = "No color";
-  clearSwatch.textContent = "×";
-  clearSwatch.addEventListener("click", (e) => {
-    e.stopPropagation();
-    handleSetColor(profile, null);
-  });
-  strip.appendChild(clearSwatch);
-
-  return strip;
-}
-
-// Fleet Capacity Overview — renders an aggregate bar across all saved profiles
-// showing how many accounts are ready / cooling down / exhausted.
-// Visible only when ≥ 2 accounts have session usage data.
-function renderFleetOverview(profiles) {
-  if (!fleetOverviewEl) return;
-
-  const all = Object.values(profiles);
-  const withSession = all.filter(
-    (p) => typeof p.usage?.limits?.session?.percentage === "number"
-  );
-
-  // Need at least 2 accounts with data to make the fleet bar useful
-  if (withSession.length < 2) {
-    fleetOverviewEl.classList.add("hidden");
-    fleetOverviewEl.textContent = "";
-    return;
-  }
-
-  const now = Date.now();
-  let ready = 0, cooling = 0, exhausted = 0;
-  let soonestReset = Infinity;
-  let totalFree = 0;
-
-  for (const p of withSession) {
-    const session = getEffectiveLimit(p.usage.limits.session, now) || p.usage.limits.session;
-    const pct = session.percentage;
-    totalFree += Math.max(0, 100 - pct);
-
-    if (pct >= 100 || (session.resetsAt && session.resetsAt > now)) {
-      exhausted++;
-      if (session.resetsAt && session.resetsAt > now) {
-        soonestReset = Math.min(soonestReset, session.resetsAt);
-      }
-    } else if (pct >= 80) {
-      cooling++;
-    } else {
-      ready++;
-    }
-  }
-
-  const avgFree = Math.round(totalFree / withSession.length);
-
-  fleetOverviewEl.textContent = "";
-  fleetOverviewEl.classList.remove("hidden");
-
-  const parts = [];
-
-  if (ready > 0) {
-    const el = document.createElement("span");
-    el.className = "fleet-stat fleet-stat-ready";
-    el.textContent = `${ready} ready`;
-    parts.push(el);
-  }
-  if (cooling > 0) {
-    const el = document.createElement("span");
-    el.className = "fleet-stat fleet-stat-cooling";
-    el.textContent = `${cooling} limited`;
-    parts.push(el);
-  }
-  if (exhausted > 0) {
-    const el = document.createElement("span");
-    el.className = "fleet-stat fleet-stat-exhausted";
-    const resetNote = soonestReset < Infinity
-      ? ` · resets ${formatResetsIn(soonestReset, "session")}`
-      : "";
-    el.textContent = `${exhausted} exhausted${resetNote}`;
-    parts.push(el);
-  }
-
-  const avgEl = document.createElement("span");
-  avgEl.className = "fleet-stat fleet-stat-avg";
-  avgEl.textContent = `${avgFree}% avg free`;
-  parts.push(avgEl);
-
-  const label = document.createElement("span");
-  label.className = "fleet-label";
-  label.textContent = "Fleet";
-  fleetOverviewEl.appendChild(label);
-
-  for (let i = 0; i < parts.length; i++) {
-    if (i > 0) {
-      const sep = document.createElement("span");
-      sep.className = "fleet-sep";
-      sep.textContent = " · ";
-      fleetOverviewEl.appendChild(sep);
-    }
-    fleetOverviewEl.appendChild(parts[i]);
-  }
-}
-
 function renderProfiles(profiles, activeId, query = "") {
   listEl.textContent = "";
   const entries = sortedEntries(profiles);
@@ -543,9 +380,6 @@ function renderProfiles(profiles, activeId, query = "") {
   // credit used), not by list position, so compute it once up front —
   // stays stable while searching, same as background.js's own lookup.
   const quickSwitchTargetId = findQuickSwitchTargetId(profiles);
-
-  // Render the fleet capacity overview bar
-  renderFleetOverview(profiles);
 
   const totalAccounts = entries.length;
   const isFirstAccount = totalAccounts === 0;
@@ -618,6 +452,13 @@ function timeAgo(ms) {
   const hours = Math.round(mins / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.round(hours / 24)}d ago`;
+}
+
+// Format the plan consistently in current-account details and saved rows.
+function formatSubscriptionTier(tier) {
+  return String(tier ?? "")
+    .replace(/_/g, " ")
+    .replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
 }
 
 const LIMIT_LABELS = {
@@ -738,7 +579,7 @@ function buildUsageDetail(usage) {
     const meta = document.createElement("div");
     meta.className = "usage-detail-tier";
     const bits = [];
-    if (usage.subscriptionTier) bits.push(usage.subscriptionTier.replace(/_/g, " "));
+    if (usage.subscriptionTier) bits.push(formatSubscriptionTier(usage.subscriptionTier));
     if (usage.capturedAt) bits.push(`as of ${timeAgo(usage.capturedAt)}`);
     meta.textContent = bits.join(" · ");
     wrap.appendChild(meta);
@@ -786,7 +627,7 @@ function buildUsageCompact(usage) {
   const meta = document.createElement("span");
   meta.className = "usage-text";
   const bits = [];
-  if (usage.subscriptionTier) bits.push(usage.subscriptionTier.replace(/_/g, " "));
+  if (usage.subscriptionTier) bits.push(formatSubscriptionTier(usage.subscriptionTier));
   bits.push(`as of ${timeAgo(usage.capturedAt)}`);
   meta.textContent = bits.join(" · ");
   wrap.appendChild(meta);
@@ -967,19 +808,6 @@ async function handlePin(profile, pinned) {
   await loadProfiles();
 }
 
-async function handleSetColor(profile, color) {
-  const res = await sendMessage({
-    type: "SET_PROFILE_COLOR",
-    profileId: profile.id,
-    color: color || null,
-  });
-  if (!res?.ok) {
-    showStatus(res?.error || "Could not set color.", "error");
-    return;
-  }
-  await loadProfiles();
-}
-
 // ---------- Theme Management ----------
 const THEMES = ["midnight", "claude-light", "claude-dark"];
 
@@ -1059,10 +887,14 @@ loadCheckboxPrefs();
 // Shows a status chip under the Summarize button in the Tools tab.
 async function refreshGeminiKeyStatus() {
   if (!geminiKeyStatus) return;
-  const stored = await chrome.storage.local.get("geminiApiKey");
-  const hasKey = !!(stored.geminiApiKey || "").trim();
+  const result = await sendMessage({ type: "GET_GEMINI_KEY_STATUS" });
+  const hasKey = result.ok && result.configured;
   geminiKeyStatus.className = "gemini-key-chip";
-  if (hasKey) {
+  if (!result.ok) {
+    geminiKeyStatus.textContent = "⚠️ Check API key storage in Settings.";
+    geminiKeyStatus.classList.add("gemini-key-missing");
+    geminiKeyStatus.classList.remove("hidden");
+  } else if (hasKey) {
     geminiKeyStatus.textContent = "✅ Gemini API key set";
     geminiKeyStatus.classList.add("gemini-key-ok");
     geminiKeyStatus.classList.remove("hidden");
@@ -1130,7 +962,7 @@ async function handleExportRaw() {
 
     port.postMessage({ type: "START_EXPORT", options });
 
-    port.onMessage.addListener((msg) => {
+    port.onMessage.addListener(async (msg) => {
       if (msg.type === "PROGRESS") {
         showStatus(msg.text || "Exporting conversation…");
       } else if (msg.type === "DONE") {
@@ -1142,9 +974,10 @@ async function handleExportRaw() {
             ? ` (${res.attachmentsSaved} file(s) saved${res.attachmentsFailed ? `, ${res.attachmentsFailed} failed` : ""})`
             : "";
         showStatus(
-          `Exported "${res.title}" (${res.messageCount} turns) — saved to Downloads/${res.filename}.${attachmentNote}`,
+          `Exported "${res.title}" (${res.messageCount} turns) — ${res.absolutePath ? `saved to ${res.absolutePath}` : "saved successfully; full path unavailable"}.${attachmentNote}`,
           "success"
         );
+        await loadExportLocation();
         try { port.disconnect(); } catch (e) {}
       } else if (msg.type === "ERROR") {
         clearInterval(pingTimer);
@@ -1228,57 +1061,144 @@ function handleToggleSummaryPreview() {
   if (arrow) arrow.textContent = isHidden ? "▴" : "▾";
 }
 
-// Downloads a JSON file containing every saved profile's cookies. This is
-// the safety net for extension updates/reinstalls that reset
-// chrome.storage.local (see README — usually caused by removing and
-// re-loading the extension, or the unpacked folder's path changing).
-async function handleBackup() {
-  backupBtn.disabled = true;
-  showStatus("Preparing backup…");
-  const res = await sendMessage({ type: "EXPORT_BACKUP" });
-  backupBtn.disabled = false;
-  if (!res?.ok) {
-    showStatus(res?.error || "Could not create a backup.", "error");
+// Passwords live only in this popup and the transient background request.
+const backupCreateForm = document.getElementById("backup-create-form");
+const backupUnlockForm = document.getElementById("backup-unlock-form");
+const backupPassword = document.getElementById("backup-password");
+const backupConfirm = document.getElementById("backup-password-confirm");
+const backupUnlockPassword = document.getElementById("backup-unlock-password");
+const backupStatus = document.getElementById("backup-status");
+let pendingBackupRestore = null;
+let backupBusy = false;
+
+function showBackupStatus(text, kind = "") {
+  backupStatus.textContent = text;
+  backupStatus.className = `backup-feedback ${kind}`;
+}
+
+function resetBackupForms() {
+  backupCreateForm.reset();
+  backupUnlockForm.reset();
+  backupCreateForm.classList.add("hidden");
+  backupUnlockForm.classList.add("hidden");
+  pendingBackupRestore = null;
+}
+
+function setBackupBusy(busy) {
+  backupBusy = busy;
+  for (const id of ["backup-btn", "restore-btn", "backup-save-btn", "backup-unlock-btn", "backup-cancel-btn", "backup-unlock-cancel-btn", "backup-password", "backup-password-confirm", "backup-unlock-password"]) {
+    document.getElementById(id).disabled = busy;
+  }
+}
+
+function handleBackup() {
+  if (backupBusy) return;
+  resetBackupForms();
+  showBackupStatus("");
+  backupCreateForm.classList.remove("hidden");
+  backupPassword.focus();
+}
+
+async function submitEncryptedBackup(event) {
+  event.preventDefault();
+  if (backupBusy) return;
+  const password = backupPassword.value;
+  try {
+    validateBackupPassword(password);
+    if (password !== backupConfirm.value) throw new Error("The backup passwords do not match.");
+  } catch (error) {
+    showBackupStatus(error.message, "error");
     return;
   }
-  showStatus(
-    `Saved ${res.count} account(s) to ${res.filename}. Keep this file private — delete it once restored.`,
-    "success"
-  );
+  backupPassword.value = "";
+  backupConfirm.value = "";
+  setBackupBusy(true);
+  showBackupStatus("Encrypting backup…");
+  try {
+    const res = await sendMessage({ type: "EXPORT_BACKUP", password });
+    if (!res?.ok) throw new Error(res?.error || "Could not create a backup.");
+    resetBackupForms();
+    showBackupStatus(`Saved ${res.count} account(s) to ${res.filename}. Keep the password safe; you need it to restore.`, "success");
+  } catch (error) {
+    showBackupStatus(error.message, "error");
+  } finally {
+    setBackupBusy(false);
+  }
 }
 
 function handleRestoreClick() {
+  if (backupBusy) return;
+  resetBackupForms();
+  showBackupStatus("");
   restoreFileInput.click();
+}
+
+async function restoreBackupData(backupData, password) {
+  setBackupBusy(true);
+  showBackupStatus(password ? "Unlocking backup…" : "Restoring legacy backup…");
+  try {
+    const res = await sendMessage({ type: "IMPORT_BACKUP", backupData, ...(password !== undefined ? { password } : {}) });
+    if (!res?.ok) throw new Error(res?.error || "Could not restore from this backup.");
+    resetBackupForms();
+    const skippedNote = res.skipped ? ` (${res.skipped} skipped — no cookies saved)` : "";
+    showBackupStatus(`Restored ${res.imported} account(s)${skippedNote}.`, "success");
+    await loadProfiles();
+  } catch (error) {
+    showBackupStatus(error.message, "error");
+  } finally {
+    setBackupBusy(false);
+  }
 }
 
 async function handleRestoreFileSelected() {
   const file = restoreFileInput.files?.[0];
-  restoreFileInput.value = ""; // allow re-selecting the same file later
-  if (!file) return;
-
-  restoreBtn.disabled = true;
-  showStatus("Reading backup file…");
-
+  restoreFileInput.value = "";
+  if (!file || backupBusy) return;
+  if (file.size > MAX_BACKUP_FILE_BYTES) {
+    showBackupStatus("Backup file is too large (maximum 16 MB).", "error");
+    return;
+  }
+  setBackupBusy(true);
+  showBackupStatus("Reading backup file…");
   let backupData;
   try {
-    const text = await file.text();
-    backupData = JSON.parse(text);
-  } catch (err) {
-    restoreBtn.disabled = false;
-    showStatus("That file isn't valid JSON — is it the right backup file?", "error");
+    backupData = JSON.parse(await file.text());
+  } catch {
+    showBackupStatus("That file isn't valid JSON — is it the right backup file?", "error");
     return;
+  } finally {
+    setBackupBusy(false);
   }
-
-  const res = await sendMessage({ type: "IMPORT_BACKUP", backupData });
-  restoreBtn.disabled = false;
-  if (!res?.ok) {
-    showStatus(res?.error || "Could not restore from this backup.", "error");
-    return;
+  if (backupData?.kind === ENCRYPTED_BACKUP_KIND) {
+    pendingBackupRestore = backupData;
+    backupUnlockForm.classList.remove("hidden");
+    showBackupStatus("This backup is encrypted. Enter its password to restore.");
+    backupUnlockPassword.focus();
+  } else {
+    await restoreBackupData(backupData);
   }
-  const skippedNote = res.skipped ? ` (${res.skipped} skipped — no cookies saved)` : "";
-  showStatus(`Restored ${res.imported} account(s)${skippedNote}.`, "success");
-  await loadProfiles();
 }
+
+async function submitBackupUnlock(event) {
+  event.preventDefault();
+  if (backupBusy || !pendingBackupRestore) return;
+  const password = backupUnlockPassword.value;
+  backupUnlockPassword.value = "";
+  await restoreBackupData(pendingBackupRestore, password);
+}
+
+backupCreateForm.addEventListener("submit", submitEncryptedBackup);
+backupUnlockForm.addEventListener("submit", submitBackupUnlock);
+for (const id of ["backup-cancel-btn", "backup-unlock-cancel-btn"]) {
+  document.getElementById(id).addEventListener("click", () => {
+    resetBackupForms();
+    showBackupStatus("");
+  });
+}
+window.addEventListener("pagehide", resetBackupForms);
+tabButtons.forEach((button) => button.addEventListener("click", () => {
+  if (!backupBusy) resetBackupForms();
+}));
 
 refreshAllBtn.addEventListener("click", handleRefreshAll);
 addBtn.addEventListener("click", handleAdd);
@@ -1396,42 +1316,51 @@ loadAutoRefreshSettings();
 // ---------- Gemini API Key Management ----------
 async function loadGeminiKeySettings() {
   if (!geminiApiKeyInput) return;
-  const stored = await chrome.storage.local.get("geminiApiKey");
-  const key = (stored.geminiApiKey || "").trim();
-  geminiApiKeyInput.value = key ? "••••••••••••••••" : "";
+  const result = await sendMessage({ type: "GET_GEMINI_KEY_STATUS" });
+  geminiApiKeyInput.value = "";
+  geminiApiKeyInput.placeholder = result.configured ? "Key saved — paste a replacement…" : "Paste your Gemini API key here…";
   if (geminiKeySettingsStatus) {
-    if (key) {
-      geminiKeySettingsStatus.textContent = "✅ API key is set.";
-    } else {
-      geminiKeySettingsStatus.textContent = "No API key saved yet.";
-    }
+    geminiKeySettingsStatus.textContent = !result.ok ? (result.error || "Could not access API key storage.")
+      : result.configured ? "✅ API key saved with local encryption." : "No API key saved yet.";
   }
 }
 
-if (saveGeminiKeyBtn) {
-  saveGeminiKeyBtn.addEventListener("click", async () => {
-    if (!geminiApiKeyInput) return;
-    const raw = geminiApiKeyInput.value.trim();
-    if (!raw || raw === "••••••••••••••••") {
-      showStatus("Paste a new API key first.", "error");
-      return;
-    }
-    await chrome.storage.local.set({ geminiApiKey: raw });
+async function updateGeminiKey(type) {
+  const apiKey = geminiApiKeyInput?.value.trim();
+  if (type === "SAVE_GEMINI_KEY" && !apiKey) {
+    showStatus("Paste a new API key first.", "error");
+    return;
+  }
+  saveGeminiKeyBtn.disabled = clearGeminiKeyBtn.disabled = true;
+  if (geminiApiKeyInput) geminiApiKeyInput.value = "";
+  try {
+    const result = await sendMessage({ type, ...(type === "SAVE_GEMINI_KEY" ? { apiKey } : {}) });
+    if (!result.ok) throw new Error(result.error || "Could not update API key.");
     await loadGeminiKeySettings();
     await refreshGeminiKeyStatus();
-    showStatus("Gemini API key saved.", "success");
-  });
+    showStatus(type === "SAVE_GEMINI_KEY" ? "Gemini API key encrypted and saved." : "Gemini API key cleared.", "success");
+  } catch (error) {
+    showStatus(error.message, "error");
+  } finally {
+    saveGeminiKeyBtn.disabled = clearGeminiKeyBtn.disabled = false;
+  }
 }
 
-if (clearGeminiKeyBtn) {
-  clearGeminiKeyBtn.addEventListener("click", async () => {
-    await chrome.storage.local.remove("geminiApiKey");
-    if (geminiApiKeyInput) geminiApiKeyInput.value = "";
-    await loadGeminiKeySettings();
-    await refreshGeminiKeyStatus();
-    showStatus("Gemini API key cleared.", "success");
-  });
+saveGeminiKeyBtn?.addEventListener("click", () => updateGeminiKey("SAVE_GEMINI_KEY"));
+clearGeminiKeyBtn?.addEventListener("click", () => updateGeminiKey("CLEAR_GEMINI_KEY"));
+window.addEventListener("pagehide", () => { if (geminiApiKeyInput) geminiApiKeyInput.value = ""; });
+
+async function loadExportLocation() {
+  const target = document.getElementById("export-save-location");
+  if (!target) return;
+  try {
+    const stored = await chrome.storage.local.get("lastSuccessfulExport");
+    target.textContent = stored.lastSuccessfulExport?.directory || "Export a chat to detect the full save location.";
+  } catch {
+    target.textContent = "Export save location is currently unavailable.";
+  }
 }
+loadExportLocation();
 
 if (geminiLink) {
   geminiLink.addEventListener("click", (e) => {

@@ -41,6 +41,11 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Extracted version: $VERSION"
 
+      - name: Validate Release Tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          test "$GITHUB_REF_NAME" = "v$VERSION" || { echo "Tag does not match extension manifest version"; exit 1; }
+
       - name: Upload Chrome Build Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -58,23 +63,22 @@ jobs:
       - name: Extract Release Notes
         id: extract_notes
         run: |
-          python -c "
-          import re
+          python <<'PY'
+          import os, re
           content = open('CHANGELOG.md', 'r', encoding='utf-8').read()
-          ver = '${{ env.VERSION }}'
+          ver = os.environ['VERSION']
           pattern = r'##\s*\[v?' + re.escape(ver) + r'\][^\n]*\n(.*?)(?=\n##\s*\[|\Z)'
           match = re.search(pattern, content, re.DOTALL)
-          if match:
-              notes = match.group(1).strip()
-          else:
-              notes = content
+          if not match or not match.group(1).strip():
+              raise SystemExit('Missing release notes for v' + ver)
+          notes = match.group(1).strip()
           with open('RELEASE_NOTES.md', 'w', encoding='utf-8') as f:
               f.write(notes)
           print('Extracted', len(notes), 'chars of release notes.')
-          "
+          PY
 
       - name: Create or Update GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
@@ -87,5 +91,7 @@ jobs:
             dist/hotswap-for-claude-chrome-v${{ env.VERSION }}.zip
             dist/hotswap-for-claude-firefox-v${{ env.VERSION }}.zip
             dist/hotswap-for-claude-v${{ env.VERSION }}.zip
+            CHANGELOG.md
+            RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
