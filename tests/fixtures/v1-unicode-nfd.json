@@ -1,0 +1,25 @@
+{
+  "password": "café-fake",
+  "payload": {
+    "kind": "hotswap-for-claude-backup",
+    "exportedAt": "2026-10-15T00:00:00.000Z",
+    "extensionVersion": "1.3.0",
+    "profiles": []
+  },
+  "envelope": {
+    "kind": "hotswap-for-claude-encrypted-backup",
+    "version": 1,
+    "kdf": {
+      "name": "PBKDF2",
+      "hash": "SHA-256",
+      "iterations": 600000,
+      "salt": "ftGghQ7SnGBQ9O1ASoBd6A=="
+    },
+    "cipher": {
+      "name": "AES-GCM",
+      "iv": "hTO13dWmP1x3KFkF",
+      "tagLength": 128
+    },
+    "ciphertext": "zBUctQVK9t+LyNkhNXncBjumT1aHoMrix2XJTVFkW+8P441LHRHWL02XFo6j9HjytLkWgmU5SV/SFWWSIfvTwC7KDRqBNRnfbbFtzYE3noe7zU17c/752okRPV4+aVxO0xysG/kSOrakFrMKYhPSjdiMSqQRl5GH9VGb61vzrG1PNp0Dtw=="
+  }
+}

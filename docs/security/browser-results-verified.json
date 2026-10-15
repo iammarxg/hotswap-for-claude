@@ -1,0 +1,68 @@
+[
+  {
+    "target": "chrome",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+    "context": "loopback HTTP using production build modules; not installed extension",
+    "checks": [
+      "v2 round trip 0 bytes",
+      "v1 round trip 0 bytes",
+      "v2 round trip 1024 bytes",
+      "v1 round trip 1024 bytes",
+      "v2 round trip 1048576 bytes",
+      "v1 round trip 1048576 bytes",
+      "v1 fixture ascii",
+      "v1 fixture unicode-nfd",
+      "v1 fixture spaces",
+      "v2 NFKC"
+    ],
+    "wasmUnderEquivalentCSP": "blocked",
+    "benchmark": {
+      "kdf": "PBKDF2-SHA-256/600000",
+      "freshSaltPerRun": true,
+      "warmup": 3,
+      "runs": 30,
+      "medianMs": 95.75,
+      "p95Ms": 136.09999999962747,
+      "memory": "not measured; Argon2 not used"
+    },
+    "ok": true
+  },
+  {
+    "target": "firefox",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:157.0) Gecko/20100101 Firefox/157.0",
+    "context": "loopback HTTP using production build modules; not installed extension",
+    "checks": [
+      "decrypt chrome export",
+      "v2 round trip 0 bytes",
+      "v1 round trip 0 bytes",
+      "v2 round trip 1024 bytes",
+      "v1 round trip 1024 bytes",
+      "v2 round trip 1048576 bytes",
+      "v1 round trip 1048576 bytes",
+      "v1 fixture ascii",
+      "v1 fixture unicode-nfd",
+      "v1 fixture spaces",
+      "v2 NFKC"
+    ],
+    "wasmUnderEquivalentCSP": "blocked",
+    "benchmark": {
+      "kdf": "PBKDF2-SHA-256/600000",
+      "freshSaltPerRun": true,
+      "warmup": 3,
+      "runs": 30,
+      "medianMs": 108,
+      "p95Ms": 119,
+      "memory": "not measured; Argon2 not used"
+    },
+    "ok": true
+  },
+  {
+    "target": "chrome",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+    "context": "loopback HTTP using production build modules; not installed extension",
+    "checks": [
+      "decrypt firefox export"
+    ],
+    "ok": true
+  }
+]

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Changed
+- New account backups use format v2 with AES-256-GCM, an authenticated header, and NFKC password normalization. Creation requires a confirmed password of at least 12 characters and shows an advisory strength warning; existing v1 and plaintext backups remain readable without automatic rewriting.
+- Restore validates file size, format, parameters and cookie payloads, then shows account labels/count and requires confirmation before adding accounts. Older backups show a notice recommending manual re-export; wrong passwords, damage and tampering share one error message.
+
+### Fixed
+- Removed credential-bearing cookie restore logs and clear backup password fields even when export validation fails.
+
+---
+
 ## [v1.3.0] - 2026-10-15
 
 ### Added

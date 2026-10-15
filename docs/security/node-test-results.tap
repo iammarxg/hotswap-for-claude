@@ -1,0 +1,118 @@
+TAP version 13
+# Subtest: original v1 committed fixtures decrypt, including short, NFD and spaced passwords
+ok 1 - original v1 committed fixtures decrypt, including short, NFD and spaced passwords
+  ---
+  duration_ms: 616.9174
+  type: 'test'
+  ...
+# Subtest: v1 and v2 round trips: empty-ish, 1 KB, 1 MB; non-extractable AES-256 keys
+ok 2 - v1 and v2 round trips: empty-ish, 1 KB, 1 MB; non-extractable AES-256 keys
+  ---
+  duration_ms: 2744.7863
+  type: 'test'
+  ...
+# Subtest: v2 normalizes NFKC while v1 retains exact UTF-8, spaces and Unicode encoding
+ok 3 - v2 normalizes NFKC while v1 retains exact UTF-8, spaces and Unicode encoding
+  ---
+  duration_ms: 1425.8872
+  type: 'test'
+  ...
+# Subtest: export 11/12/1024/1025 character boundaries; import allows short legacy passwords
+ok 4 - export 11/12/1024/1025 character boundaries; import allows short legacy passwords
+  ---
+  duration_ms: 783.6325
+  type: 'test'
+  ...
+# Subtest: v1/v2 ciphertext, tag, salt, IV, KDF and cipher tampering/truncation/extension/downgrade fail generically
+ok 5 - v1/v2 ciphertext, tag, salt, IV, KDF and cipher tampering/truncation/extension/downgrade fail generically
+  ---
+  duration_ms: 3011.017
+  type: 'test'
+  ...
+# Subtest: v2 AAD exact layout: independently encrypt with mismatched authenticated version but same key/IV
+ok 6 - v2 AAD exact layout: independently encrypt with mismatched authenticated version but same key/IV
+  ---
+  duration_ms: 801.9138
+  type: 'test'
+  ...
+# Subtest: header validation rejects malformed fields without any WebCrypto calls; iteration bomb <100ms
+ok 7 - header validation rejects malformed fields without any WebCrypto calls; iteration bomb <100ms
+  ---
+  duration_ms: 199.6541
+  type: 'test'
+  ...
+# Subtest: file guard, canonical structure and duplicate-sensitive parsing
+ok 8 - file guard, canonical structure and duplicate-sensitive parsing
+  ---
+  duration_ms: 0.7945
+  type: 'test'
+  ...
+# Subtest: schema rejects unknown keys, wrong types, cookie scope/name and oversized fields
+ok 9 - schema rejects unknown keys, wrong types, cookie scope/name and oversized fields
+  ---
+  duration_ms: 1.9859
+  type: 'test'
+  ...
+# Subtest: preview pins its clone, expires and rejects superseded asynchronous previews without writes
+ok 10 - preview pins its clone, expires and rejects superseded asynchronous previews without writes
+  ---
+  duration_ms: 385.521
+  type: 'test'
+  ...
+# Subtest: import preview writes nothing; confirmation atomic, one-use, cancel and failures leave storage alone
+ok 11 - import preview writes nothing; confirmation atomic, one-use, cancel and failures leave storage alone
+  ---
+  duration_ms: 1355.2295
+  type: 'test'
+  ...
+# Subtest: old extension rejects v2 before mutation (existing error copy cannot be changed retroactively)
+ok 12 - old extension rejects v2 before mutation (existing error copy cannot be changed retroactively)
+  ---
+  duration_ms: 193.5758
+  type: 'test'
+  ...
+# Subtest: no secret logging/storage during encrypt, decrypt, preview or failures; derived key never extractable
+ok 13 - no secret logging/storage during encrypt, decrypt, preview or failures; derived key never extractable
+  ---
+  duration_ms: 779.2741
+  type: 'test'
+  ...
+# Subtest: cookie restore rejection never logs credential values or raw exceptions
+ok 14 - cookie restore rejection never logs credential values or raw exceptions
+  ---
+  duration_ms: 3.0527
+  type: 'test'
+  ...
+# Subtest: invalid export attempt clears password and confirmation fields
+ok 15 - invalid export attempt clears password and confirmation fields
+  ---
+  duration_ms: 1.177
+  type: 'test'
+  ...
+# Subtest: runtime boundary rejects content-script and non-popup backup commands; only a preview token authorizes import
+ok 16 - runtime boundary rejects content-script and non-popup backup commands; only a preview token authorizes import
+  ---
+  duration_ms: 6.6731
+  type: 'test'
+  ...
+# Subtest: RFC 7914 section 11: both PBKDF2-HMAC-SHA-256 known-answer vectors
+ok 17 - RFC 7914 section 11: both PBKDF2-HMAC-SHA-256 known-answer vectors
+  ---
+  duration_ms: 62.4666
+  type: 'test'
+  ...
+# Subtest: Wycheproof AES-GCM known-answer tcId 2: encryption, AAD and tag verification
+ok 18 - Wycheproof AES-GCM known-answer tcId 2: encryption, AAD and tag verification
+  ---
+  duration_ms: 3.2762
+  type: 'test'
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 12419.1538

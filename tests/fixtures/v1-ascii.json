@@ -1,0 +1,49 @@
+{
+  "password": "fake",
+  "payload": {
+    "kind": "hotswap-for-claude-backup",
+    "exportedAt": "2026-10-15T00:00:00.000Z",
+    "extensionVersion": "1.3.0",
+    "profiles": [
+      {
+        "id": "fake-id",
+        "label": "Fake account",
+        "email": null,
+        "usage": null,
+        "cookies": [
+          {
+            "name": "fake0",
+            "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "domain": ".claude.ai",
+            "path": "/",
+            "secure": true,
+            "httpOnly": true,
+            "sameSite": "lax",
+            "session": true,
+            "hostOnly": false,
+            "storeId": "0"
+          }
+        ],
+        "createdAt": 1,
+        "updatedAt": 1,
+        "pinned": false
+      }
+    ]
+  },
+  "envelope": {
+    "kind": "hotswap-for-claude-encrypted-backup",
+    "version": 1,
+    "kdf": {
+      "name": "PBKDF2",
+      "hash": "SHA-256",
+      "iterations": 600000,
+      "salt": "+stMl9HCFDigSLWnl/ozOg=="
+    },
+    "cipher": {
+      "name": "AES-GCM",
+      "iv": "mgYg5VTG+h2MWasT",
+      "tagLength": 128
+    },
+    "ciphertext": "LgTTBSJQ8bowdtLEwj/4qasxIhdeq0Q6ndkkYONPvP9+zD4PGMyT9B64ql29JO24ybdfTbSsjoFihOwoKG8aFh8/qmar1Npge9y4mT2Wu8SHsdrloqmZ2Vd9lEYWzIKP8ZzbqiGTSHHS0egtzDo8TsAhIf3C1gyTQBNyUp0wBybYHAAraFli/X2OpG222f+H440zijJRBODpKKPnfdlSJUEDZOTvHt6okf+ljQxfLPZUOIeU+1iaROCrwNOJfcLPqc0pqmStWdGey+yiTg1dXgciGj3M2P0ZddVLgjh7xW+dksLuAVXgg4gTvSS+sGgZBj+02mVqtZWbA2Aliu7oM5xVrzjCjuVVdvEKMf8c0qy7y4kzmcCkPSfF0tFE1v4z1q/sTSlIDT8fgtYNOCqKi26y8M5gTO3qkTFOu+fue3nEWKCbXNexhVMTp/mmhFvkABuMSew7YVoR4Vr44chPIvdz7JiUsSZTxyv0CLMsBKMr5KXp1OHskm/NxjU+uShrUbAQk/XV6955NEiHTSYPPJoWVm1JUQqjvQpLzeXeeN2GaVuLsiwRtKChLjm44KCysTgKVc0TxgVB530TBPWgyNX9TRVh6sngKq6veGhjoZbIw3s7niwDRmfTVEzdXx90qsAnGBOMi6FCgkdvL8AwZPINXQ3tyr7/uJU1A03Ynp37GlFLvW3cXhRmqhrhgUOvoSOr+WaY/kuep3BRgOWUdMvb14bJMZQByC2sbCs09ZXzjx00f5+r6VSgR4o9KNo/20Ja3qU+Wyrtytn6hAPAFawNadkibUMYmlaxQvikINY6syQFaUvmVPOsfqb+ibeQfMLNjepApjIldaIqSYTt1IT33taZUY/PAOr8C25hOMhLc3XE4skWGUtSyP+qBJOu8I+2xDFN/lHvv02Cfye2FFhTJcDYHX0xc/64daQ73iZxT1cAIr35JqeXtesrk6aFtNJtm39tmjGN2bhRtY80VJFw+AyyHVlqsZHBi1WLACfwTTYubNQgiab3BcRW/9ni/vXnlP4j47KhL6J6U6bIbBivIiGZZMOZS4g64ux0Vxod4oBrEwtEEaymHlYjh2yHaV7ltQMC0jECjFnkCP4WvgBsLTpxT/5m3/mgmKoSk1mcvuV1O8CBfamS6iS3YYZV45RaorgVpKWpH0JIzPRHfvsErvkNtigS95GQgCtwJ1S1hb7Xq0yOExaY8+zkKeW5GZbnseK6EJiOrG8X9gysu9A2RGhR2sLoKUPg69gX39SOYFxxO1xeQTCo/Ole3FudEHlZUPO0aGYwvkWuUMK/sMHyunoBHOIpibt0YwsKQUtvItJwBRJp2jaruXVaIBHjTNXAm/wk0sLwdq561zpoirykfQtYblEW200DCwUXbDIImlPMG8fgBwzvTeIWnuQRu1JHfOLSIdLwdSSb5BZwWIn3s2imTGGn3cvOG6dGn/0wPi3NrLiV04x88uxVnHgBP8gLmVFsrJs9IeGQuPr660yncwQ43ulOyvrIq98K+S17uC1d2SkRsZAKtubaYK3kaxMfWNXYVkA9PnbTmzDg1tP1NeWr08WV5+WR0O5HksC4iCMgIronaR20SCm4t3DP2qQXJ+UiMe46dPJVsKVvSOoXokFzsDrAOfMT+6jNT4jBRIRYxJciJg6Wy/yk57ZF6Ufl6QUrPtLuqSVnHK8X8TLcisRCo8farGpPzlJPC75OLg8UCbnE07W20WmgcRTWp/GkXwQdCYftjLLkBE3dF7DT4oUrllfvrGbwi7vsP0Nffrggr4V7k7UA8kMTYoJHkyOC99SfN3Xw3pLnGwUt8xailLNwoyNkuN+D1+zfU5WWUzLwD06wUT6Q6RVB7j+dGLgHkam17UqKLKRvH+KOfDFVD7jQAKOzWJfPyMo9xELPDJIo7iOr"
+  }
+}

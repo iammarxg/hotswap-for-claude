@@ -359,7 +359,9 @@
         <div class="panel-body">
           <p class="hint">
             Save your accounts in a password-protected file. Older unencrypted
-            backups can still be restored.
+            backups can still be restored. A forgotten password cannot be recovered.
+            Backups may contain active session credentials: store them like a password.
+            Encryption does not protect a compromised device.
           </p>
           <div class="btn-row">
             <button id="backup-btn" class="btn btn-primary" type="button">Create encrypted backup</button>
@@ -373,7 +375,8 @@
             <label for="backup-password-confirm">Confirm password
               <input id="backup-password-confirm" type="password" autocomplete="new-password" maxlength="1024" required />
             </label>
-            <p class="hint">Use at least 4 characters. HotSwap does not save this password and cannot recover it.</p>
+            <p class="hint">Use at least 12 characters. HotSwap does not save this password and cannot recover it.</p>
+            <p id="backup-password-warning" class="hint" role="status" aria-live="polite"></p>
             <div class="btn-row">
               <button id="backup-save-btn" class="btn btn-primary" type="submit">Encrypt &amp; download</button>
               <button id="backup-cancel-btn" class="btn btn-ghost" type="button">Cancel</button>
@@ -384,10 +387,19 @@
               <input id="backup-unlock-password" type="password" autocomplete="off" maxlength="1024" required />
             </label>
             <div class="btn-row">
-              <button id="backup-unlock-btn" class="btn btn-primary" type="submit">Unlock &amp; restore</button>
+              <button id="backup-unlock-btn" class="btn btn-primary" type="submit">Unlock &amp; preview</button>
               <button id="backup-unlock-cancel-btn" class="btn btn-ghost" type="button">Cancel</button>
             </div>
           </form>
+          <div id="backup-preview" class="backup-form hidden">
+            <p id="backup-preview-title"></p>
+            <ul id="backup-preview-labels"></ul>
+            <p class="hint">An encrypted file can still contain someone else's session. Confirm only if you trust its source. This preview expires after two minutes.</p>
+            <div class="btn-row">
+              <button id="backup-apply-btn" class="btn btn-primary" type="button">Confirm import</button>
+              <button id="backup-preview-cancel-btn" class="btn btn-ghost" type="button">Cancel</button>
+            </div>
+          </div>
           <p id="backup-status" class="backup-feedback" role="status" aria-live="polite"></p>
         </div>
       </section>

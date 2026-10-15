@@ -16,7 +16,7 @@ Save your accounts, see their usage, and bring useful context into your next cha
 - **Keep accounts ready.** Choose background refresh every 4, 8, 12, 24, or 48 hours. Expired or revoked logins may still need you to sign in again.
 - **Export your conversation.** Download a ZIP with a Markdown transcript, thinking, and optional images, code, artifacts, and attachments. The save confirmation shows the actual full file path. Raw exports need no AI API key.
 - **Create a Gemini handoff.** Preview and copy a summary for your next chat using your own API key, encrypted locally. Summaries send selected conversation content and optional file/code context to Google; Google's terms and charges apply.
-- **Back up with a password.** Create encrypted account backups with a confirmed password of at least 4 characters. Restore encrypted files or older unencrypted backups. HotSwap never saves or recovers the backup password.
+- **Back up with a password.** Create encrypted v2 account backups with a confirmed password of at least 12 characters. Restore v1 encrypted files or older unencrypted backups after reviewing and confirming the account list. HotSwap never saves or recovers the backup password. See the [backup format](docs/security/backup-format.md).
 - **Choose your theme.** Use Midnight, Claude Light, or Claude Dark.
 
 Each Claude account keeps its own plan and limits. Switching does not move the original conversation; export or summarize its context and bring it into a new chat yourself.

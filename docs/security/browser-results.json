@@ -1,0 +1,20 @@
+[
+  {
+    "target": "chrome",
+    "ok": false,
+    "error": "Browser exited or did not return results",
+    "exitCode": null
+  },
+  {
+    "target": "firefox",
+    "ok": false,
+    "error": "Browser exited or did not return results",
+    "exitCode": null
+  },
+  {
+    "target": "chrome",
+    "ok": false,
+    "error": "Browser exited or did not return results",
+    "exitCode": null
+  }
+]

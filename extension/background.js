@@ -2,7 +2,9 @@ import { getGeminiApiKey, getGeminiKeyStatus, saveGeminiApiKey, clearGeminiApiKe
 import { rememberExportLocation } from "./export-location.js";
 import { exportClaudeConversationInPage } from "./export-page-script.js";
 import { SimpleZip } from "./zip-builder.js";
-import { ENCRYPTED_BACKUP_KIND, encryptBackup, decryptBackup } from "./backup-crypto.js";
+import { encryptBackup } from "./backup-crypto.js";
+import { createBackupRestore } from "./backup-restore.js";
+import { BACKUP_ERROR, UNSUPPORTED_VERSION_ERROR } from "./backup-schema.js";
 
 // ---------- Free Plan SSE Usage Cache & Monotonic Fallback ----------
 const SSE_USAGE_KEY = "hotswap_sse_usage";
@@ -175,11 +177,11 @@ async function setCookies(cookies) {
         // chrome.cookies.set resolves to null (no throw) on rejection by
         // the cookie store, e.g. invalid domain/secure combos.
         failed.push(c.name);
-        console.warn("Cookie store rejected", c.name, details);
+        console.warn("Cookie store rejected a saved cookie.");
       }
     } catch (err) {
       failed.push(c.name);
-      console.warn("Failed to set cookie", c.name, err);
+      console.warn("Failed to restore a saved cookie.");
     }
   }
   return { succeeded, failed };
@@ -736,37 +738,7 @@ async function exportProfilesBackup(password) {
 // replacing it outright, so restoring doesn't clobber accounts added since
 // the backup was taken. Imported profiles get fresh IDs so they can't
 // collide with (or silently overwrite) anything already saved.
-async function importProfilesBackup(backupData, password) {
-  if (backupData?.kind === ENCRYPTED_BACKUP_KIND) {
-    backupData = await decryptBackup(backupData, password);
-  }
-  if (backupData?.kind !== "hotswap-for-claude-backup" || !Array.isArray(backupData.profiles)) {
-    throw new Error("This doesn't look like a valid HotSwap for Claude backup file.");
-  }
-
-  const profiles = await getProfiles();
-  let imported = 0;
-  let skipped = 0;
-
-  for (const p of backupData.profiles) {
-    if (!p || !Array.isArray(p.cookies) || p.cookies.length === 0) {
-      skipped++;
-      continue;
-    }
-    const id = crypto.randomUUID();
-    profiles[id] = {
-      id,
-      label: p.label ? String(p.label).slice(0, 40) : "Restored account",
-      cookies: p.cookies,
-      createdAt: typeof p.createdAt === "number" ? p.createdAt : Date.now(),
-      updatedAt: Date.now(),
-    };
-    imported++;
-  }
-
-  await saveProfiles(profiles);
-  return { imported, skipped };
-}
+const backupRestore = createBackupRestore({ getProfiles, saveProfiles });
 
 // ---------- Auto-refresh (keep sessions alive) ----------
 //
@@ -1627,6 +1599,10 @@ chrome.commands.onCommand.addListener(async (command) => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
+      if (["EXPORT_BACKUP", "PREVIEW_BACKUP", "IMPORT_BACKUP", "CANCEL_BACKUP_IMPORT"].includes(message.type) &&
+          (_sender.tab || _sender.id !== chrome.runtime.id || _sender.url !== chrome.runtime.getURL("popup.html"))) {
+        throw new Error(BACKUP_ERROR);
+      }
       if (["GET_GEMINI_KEY_STATUS", "SAVE_GEMINI_KEY", "CLEAR_GEMINI_KEY"].includes(message.type) &&
           (_sender.tab || _sender.id !== chrome.runtime.id)) {
         throw new Error("API key settings are available only inside the extension.");
@@ -1723,9 +1699,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           sendResponse({ ok: true, ...info });
           break;
         }
-        case "IMPORT_BACKUP": {
-          const info = await importProfilesBackup(message.backupData, message.password);
+        case "PREVIEW_BACKUP": {
+          const info = await backupRestore.preview(message.backupData, message.password);
           sendResponse({ ok: true, ...info });
+          break;
+        }
+        case "IMPORT_BACKUP": {
+          const info = await backupRestore.confirm(message.token);
+          sendResponse({ ok: true, ...info });
+          break;
+        }
+        case "CANCEL_BACKUP_IMPORT": {
+          backupRestore.cancel();
+          sendResponse({ ok: true });
           break;
         }
         case "GET_GEMINI_KEY_STATUS": {
@@ -1800,7 +1786,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           sendResponse({ ok: false, error: "Unknown message type" });
       }
     } catch (err) {
-      sendResponse({ ok: false, error: err.message || String(err) });
+      const importing = ["PREVIEW_BACKUP", "IMPORT_BACKUP"].includes(message.type);
+      sendResponse({ ok: false, error: importing
+        ? (err.message === UNSUPPORTED_VERSION_ERROR ? UNSUPPORTED_VERSION_ERROR : BACKUP_ERROR)
+        : message.type === "EXPORT_BACKUP" ? "Could not create or finish saving the encrypted backup. Check the password requirements and try again."
+        : err.message || String(err) });
     }
   })();
   return true; // keep the message channel open for the async response

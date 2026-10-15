@@ -1,4 +1,5 @@
-import { ENCRYPTED_BACKUP_KIND, MAX_BACKUP_FILE_BYTES, validateBackupPassword } from "./backup-crypto.js";
+import { ENCRYPTED_BACKUP_KIND, validateBackupPassword, validateBackupEnvelope, backupPasswordWarning } from "./backup-crypto.js";
+import { readBackupFile, BACKUP_ERROR } from "./backup-schema.js";
 
 // popup.js — no inline scripts (CSP-compliant), talks to background.js
 // via chrome.runtime.sendMessage.
@@ -1069,6 +1070,8 @@ const backupConfirm = document.getElementById("backup-password-confirm");
 const backupUnlockPassword = document.getElementById("backup-unlock-password");
 const backupStatus = document.getElementById("backup-status");
 let pendingBackupRestore = null;
+let pendingBackupToken = null;
+let pendingBackupLegacy = false;
 let backupBusy = false;
 
 function showBackupStatus(text, kind = "") {
@@ -1082,11 +1085,17 @@ function resetBackupForms() {
   backupCreateForm.classList.add("hidden");
   backupUnlockForm.classList.add("hidden");
   pendingBackupRestore = null;
+  pendingBackupToken = null;
+  pendingBackupLegacy = false;
+  document.getElementById("backup-preview").classList.add("hidden");
+  document.getElementById("backup-preview-labels").replaceChildren();
+  document.getElementById("backup-password-warning").textContent = "";
+  sendMessage({ type: "CANCEL_BACKUP_IMPORT" }).catch(() => {});
 }
 
 function setBackupBusy(busy) {
   backupBusy = busy;
-  for (const id of ["backup-btn", "restore-btn", "backup-save-btn", "backup-unlock-btn", "backup-cancel-btn", "backup-unlock-cancel-btn", "backup-password", "backup-password-confirm", "backup-unlock-password"]) {
+  for (const id of ["backup-btn", "restore-btn", "backup-save-btn", "backup-unlock-btn", "backup-cancel-btn", "backup-unlock-cancel-btn", "backup-password", "backup-password-confirm", "backup-unlock-password", "backup-apply-btn", "backup-preview-cancel-btn"]) {
     document.getElementById(id).disabled = busy;
   }
 }
@@ -1103,9 +1112,12 @@ async function submitEncryptedBackup(event) {
   event.preventDefault();
   if (backupBusy) return;
   const password = backupPassword.value;
+  const confirmation = backupConfirm.value;
+  backupPassword.value = "";
+  backupConfirm.value = "";
   try {
     validateBackupPassword(password);
-    if (password !== backupConfirm.value) throw new Error("The backup passwords do not match.");
+    if (password !== confirmation) throw new Error("The backup passwords do not match.");
   } catch (error) {
     showBackupStatus(error.message, "error");
     return;
@@ -1137,12 +1149,21 @@ async function restoreBackupData(backupData, password) {
   setBackupBusy(true);
   showBackupStatus(password ? "Unlocking backup…" : "Restoring legacy backup…");
   try {
-    const res = await sendMessage({ type: "IMPORT_BACKUP", backupData, ...(password !== undefined ? { password } : {}) });
+    const res = await sendMessage({ type: "PREVIEW_BACKUP", backupData, ...(password !== undefined ? { password } : {}) });
     if (!res?.ok) throw new Error(res?.error || "Could not restore from this backup.");
-    resetBackupForms();
-    const skippedNote = res.skipped ? ` (${res.skipped} skipped — no cookies saved)` : "";
-    showBackupStatus(`Restored ${res.imported} account(s)${skippedNote}.`, "success");
-    await loadProfiles();
+    pendingBackupRestore = null;
+    pendingBackupToken = res.token;
+    pendingBackupLegacy = res.legacy;
+    backupUnlockForm.classList.add("hidden");
+    const labels = document.getElementById("backup-preview-labels");
+    labels.replaceChildren(...res.labels.map(label => {
+      const item = document.createElement("li");
+      item.textContent = label;
+      return item;
+    }));
+    document.getElementById("backup-preview-title").textContent = `Import ${res.count} account(s)?`;
+    document.getElementById("backup-preview").classList.remove("hidden");
+    showBackupStatus(res.legacy ? "This backup uses an older format. After restoring, you can re-export it in the newer format." : "Review the accounts before confirming. Only restore sessions from a source you trust.");
   } catch (error) {
     showBackupStatus(error.message, "error");
   } finally {
@@ -1154,17 +1175,14 @@ async function handleRestoreFileSelected() {
   const file = restoreFileInput.files?.[0];
   restoreFileInput.value = "";
   if (!file || backupBusy) return;
-  if (file.size > MAX_BACKUP_FILE_BYTES) {
-    showBackupStatus("Backup file is too large (maximum 16 MB).", "error");
-    return;
-  }
   setBackupBusy(true);
   showBackupStatus("Reading backup file…");
   let backupData;
   try {
-    backupData = JSON.parse(await file.text());
-  } catch {
-    showBackupStatus("That file isn't valid JSON — is it the right backup file?", "error");
+    backupData = await readBackupFile(file);
+    if (backupData.kind === ENCRYPTED_BACKUP_KIND) validateBackupEnvelope(backupData);
+  } catch (error) {
+    showBackupStatus(error.message, "error");
     return;
   } finally {
     setBackupBusy(false);
@@ -1189,7 +1207,27 @@ async function submitBackupUnlock(event) {
 
 backupCreateForm.addEventListener("submit", submitEncryptedBackup);
 backupUnlockForm.addEventListener("submit", submitBackupUnlock);
-for (const id of ["backup-cancel-btn", "backup-unlock-cancel-btn"]) {
+backupPassword.addEventListener("input", () => {
+  document.getElementById("backup-password-warning").textContent = backupPasswordWarning(backupPassword.value);
+});
+document.getElementById("backup-apply-btn").addEventListener("click", async () => {
+  if (backupBusy || !pendingBackupToken) return;
+  const token = pendingBackupToken;
+  const legacy = pendingBackupLegacy;
+  pendingBackupToken = null;
+  setBackupBusy(true);
+  try {
+    const res = await sendMessage({ type: "IMPORT_BACKUP", token });
+    if (!res?.ok) throw new Error(BACKUP_ERROR);
+    resetBackupForms();
+    showBackupStatus(`Restored ${res.imported} account(s)${res.skipped ? ` (${res.skipped} skipped — no cookies saved)` : ""}.${legacy ? " This backup uses an older format. After restoring, you can re-export it in the newer format." : ""}`, "success");
+    await loadProfiles();
+  } catch {
+    resetBackupForms();
+    showBackupStatus(BACKUP_ERROR, "error");
+  } finally { setBackupBusy(false); }
+});
+for (const id of ["backup-cancel-btn", "backup-unlock-cancel-btn", "backup-preview-cancel-btn"]) {
   document.getElementById(id).addEventListener("click", () => {
     resetBackupForms();
     showBackupStatus("");
