@@ -1,0 +1,20 @@
+{
+  "context": "installed production Firefox MV3 add-on, actual toolbar popup/runtime/storage/downloads",
+  "checks": [
+    "actual Firefox popup exports encrypted v2 after download completion",
+    "download completed inside isolated Firefox test directory",
+    "actual Firefox download decrypts as v2",
+    "Firefox wrong password leaves storage unchanged",
+    "Firefox shows preview without applying sessions",
+    "Firefox cancellation leaves storage unchanged",
+    "Firefox confirmation applies through actual popup runtime messages",
+    "Firefox v1 restore previews with manual re-export notice",
+    "Firefox installed add-on restores original-writer v1 fixture",
+    "closing Firefox popup invalidates staged import without storage changes",
+    "Firefox background restart discards pending import safely",
+    "Firefox interrupted export never reports success",
+    "Firefox browser confirms interrupted download state"
+  ],
+  "browser": "Firefox 157.0.1",
+  "ok": true
+}

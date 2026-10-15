@@ -724,11 +724,17 @@ async function exportProfilesBackup(password) {
   const encrypted = await encryptBackup(backup, password);
   const json = JSON.stringify(encrypted, null, 2);
   const filename = `hotswap-for-claude-backup-encrypted-${Date.now()}.json`;
-  const dataUrl = "data:application/json;charset=utf-8," + encodeURIComponent(json);
-  const downloadId = await chrome.downloads.download({ url: dataUrl, filename, saveAs: false });
-  const settled = await waitForDownloadSettled(downloadId);
-  if (!settled.ok) {
-    throw new Error(`The backup file didn't finish saving (${settled.error}).`);
+  // Firefox's background document can create same-extension Blob URLs; its MV3
+  // download API rejects data: URLs. Chromium service workers lack this method.
+  const blobUrl = typeof URL.createObjectURL === "function"
+    ? URL.createObjectURL(new Blob([json], { type: "application/json;charset=utf-8" })) : null;
+  try {
+    const url = blobUrl || "data:application/json;charset=utf-8," + encodeURIComponent(json);
+    const downloadId = await chrome.downloads.download({ url, filename, saveAs: false });
+    const settled = await waitForDownloadSettled(downloadId);
+    if (!settled.ok) throw new Error("The backup file didn't finish saving.");
+  } finally {
+    if (blobUrl) URL.revokeObjectURL(blobUrl);
   }
 
   return { count: list.length, filename };

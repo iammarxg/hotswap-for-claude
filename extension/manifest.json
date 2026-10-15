@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HotSwap for Claude",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Switch Claude accounts, track usage, export chats, create Gemini handoff summaries, and save encrypted account backups.",
   "permissions": [
     "cookies",

@@ -1,0 +1,22 @@
+{
+  "browser": "153.0.8010.12",
+  "context": "installed production MV3 extension, actual toolbar popup/runtime/storage/downloads",
+  "checks": [
+    "invalid export clears both password fields",
+    "actual popup v2 export reports success only after download completion",
+    "download completed inside isolated test directory",
+    "downloaded v2 file decrypts with its confirmed password",
+    "wrong password leaves actual browser storage untouched",
+    "valid restore previews account labels without applying sessions",
+    "cancel preview leaves storage untouched",
+    "explicit confirmation adds account atomically through real runtime messages",
+    "v1 restore uses legacy password and shows manual re-export notice",
+    "original-code v1 fixture imports through installed extension",
+    "closing actual popup discards pending confirmation",
+    "worker termination loses staged import safely without storage mutation",
+    "actual storage quota failure leaves every existing account unchanged",
+    "cancelled actual download is not presented as successful export",
+    "browser confirms interrupted download state"
+  ],
+  "ok": true
+}

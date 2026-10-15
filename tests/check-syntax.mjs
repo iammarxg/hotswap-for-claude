@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 let count = 0;
 for (const dir of ['extension', 'tests']) {
   for (const name of await readdir(dir)) {
-    if (!/\.(m?js)$/.test(name)) continue;
+    if (!/\.[cm]?js$/.test(name)) continue;
     const result = spawnSync(process.execPath, ['--check', `${dir}/${name}`], { encoding: 'utf8' });
     if (result.status !== 0) { process.stderr.write(result.stderr); process.exit(1); }
     count++;

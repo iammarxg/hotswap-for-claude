@@ -57,3 +57,21 @@ test('runtime boundary rejects content-script and non-popup backup commands; onl
   assert.equal((await request({ type: 'IMPORT_BACKUP', token: preview.token })).ok, true);
   assert.equal(writes, 1);
 });
+
+test('backup download uses document Blob URLs until settlement, revokes on failure, and supports service-worker fallback', async () => {
+  const source=background.slice(background.indexOf('async function exportProfilesBackup('),background.indexOf('// Adds profiles from a backup file'));
+  for (const documentContext of [true,false]) for (const outcome of ['complete','interrupted','rejected']) {
+    let revoked=false, usedURL;
+    const context=vm.createContext({
+      Blob, URL: documentContext ? { createObjectURL: ()=>'blob:synthetic', revokeObjectURL: value=>{assert.equal(value,'blob:synthetic');revoked=true;} } : {},
+      getProfiles: async()=>({fake:{id:'fake',cookies:[]}}), encryptBackup: async()=>({kind:'fake-encrypted',ciphertext:'synthetic'}),
+      chrome:{runtime:{getManifest:()=>({version:'1.3.1'})},downloads:{download:async options=>{usedURL=options.url;assert.equal(revoked,false);if(outcome==='rejected')throw new Error('browser rejected');return 1;}}},
+      waitForDownloadSettled:async()=>{assert.equal(revoked,false);return {ok:outcome==='complete'};},
+    });
+    vm.runInContext(source,context);
+    if(outcome==='complete') assert.equal((await context.exportProfilesBackup('fake')).count,1);
+    else await assert.rejects(()=>context.exportProfilesBackup('fake'));
+    assert.equal(documentContext ? usedURL==='blob:synthetic' : usedURL.startsWith('data:application/json'),true);
+    assert.equal(revoked,documentContext);
+  }
+});

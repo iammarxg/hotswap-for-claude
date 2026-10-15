@@ -1,5 +1,7 @@
 # Encryption hardening implementation and validation
 
+**Release follow-up:** the remaining installed-extension checks were subsequently run, a Firefox download incompatibility was fixed, and v1.3.1 was prepared. See [release-validation-v1.3.1.md](release-validation-v1.3.1.md) for updated status and evidence. The body below preserves the original implementation-time record.
+
 Date: 2026-10-15. Baseline `157c59a`; Phase 0 was committed **before behavior changes**, in `c694b7b`. Changes are local; nothing was pushed or published. The real backup supplied by the user was not read/decrypted, copied, logged or committed. Every fixture is synthetic.
 
 ## Files changed

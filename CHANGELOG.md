@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.3.1] - 2026-10-15
 
 ### Changed
 - New account backups use format v2 with AES-256-GCM, an authenticated header, and NFKC password normalization. Creation requires a confirmed password of at least 12 characters and shows an advisory strength warning; existing v1 and plaintext backups remain readable without automatic rewriting.
@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Removed credential-bearing cookie restore logs and clear backup password fields even when export validation fails.
+- Fixed Firefox backup downloads by using an extension-owned Blob URL and releasing it after completion or failure.
 
 ---
 
