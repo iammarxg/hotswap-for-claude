@@ -13,7 +13,7 @@ HotSwap is a Manifest V3 browser extension for Claude account switching, usage m
 
 Reviewed against this checkout on 2026-10-24:
 
-- The source manifest is **1.3.2**, a validated release candidate for Claude's redesigned chat and file-viewer UI. Packages and store kits are prepared locally; publication requires its own authorization.
+- The source manifest is **1.3.2**, published on GitHub for Claude's redesigned chat and file-viewer UI. The workflow and all five public assets were verified; browser-store upload kits remain prepared locally. Future publication actions require their own authorization.
 - The exporter uses authenticated conversation/file reads, an extension-owned runner, and acknowledged chunks. Focused Node, DOM fallback, installed Brave/Firefox exports and backup smoke checks pass. Live reader checks recovered all nine supplied branches/files. Personal Brave acceptance also passed: the actual exported ZIP preserved 12 turns, 2,000 numbered lines and 43 files with matching hashes; a native individual download completed. See the export notes for evidence.
 - For export changes, read [the export development notes](docs/export-development.md), which own the observed Claude routes, completeness rules, and current validation status. Preserve existing local changes rather than restoring the reverted beta wholesale.
 - Fleet summary and account color tags were removed in 1.3.0; pinning, themes, per-account usage, notifications, and onboarding remain.

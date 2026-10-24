@@ -1,6 +1,6 @@
-# v1.3.2 release candidate validation
+# v1.3.2 release validation
 
-2026-10-24. The maintainer requested local preparation for publication and a GitHub release. Publication, tagging, pushing and store submission remain separate actions.
+2026-10-24. The maintainer requested local preparation, then explicitly authorized GitHub publication. The release is published and verified. Browser-store submission and website deployment remain separate actions.
 
 ## Runtime evidence
 
@@ -28,3 +28,16 @@ The release is titled **HotSwap for Claude v1.3.2**, dated October 24, 2026. The
 5. `RELEASE_NOTES.md`
 
 At preparation time, remote `main` was `86d04618c12d7f7f6a235a7cac37d5bc572d1aae` and no remote `v1.3.2` tag existed. A local release-candidate snapshot can be based on that revision without rewriting the maintainer's existing beta commit or working tree. The workflow publishes only on an authorized matching tag push; ordinary main/manual builds do not publish. Local ZIP timestamps and platform line endings can change whole-archive hashes in CI without changing packaged source bytes.
+
+## Verified GitHub publication
+
+[HotSwap for Claude v1.3.2](https://github.com/iammarxg/hotswap-for-claude/releases/tag/v1.3.2) is the latest stable public release. The annotated tag resolves to approved commit `e768e05f93c548dd02acdc2c1fcece09398e7b34`. Both the [tag workflow](https://github.com/iammarxg/hotswap-for-claude/actions/runs/40100504680) and [main workflow](https://github.com/iammarxg/hotswap-for-claude/actions/runs/40100504612) completed successfully.
+
+All five public assets were downloaded and matched GitHub's SHA-256 digests. The Chrome and Firefox ZIPs passed every CRC, exact file inventory and approved-commit runtime-byte comparison, with correct browser-specific v1.3.2 manifests. The default ZIP equals Chrome; the published changelog matches the commit and the release notes match the release body. CI newline/timestamp differences explain the expected difference from local archive hashes.
+
+Published package SHA-256 values:
+
+- Chrome/default: `79a55f71c2d2895f87169c7dbf7c8e56f645b997ce6f984b9e13c9a4bc317393`
+- Firefox: `06dd49647f975848ea0654cc147b337855b34c9cb05523a000ec32476af6b5a1`
+
+This publication record is a forward-only documentation update; the published version tag and release assets remain immutable.

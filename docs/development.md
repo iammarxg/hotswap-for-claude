@@ -76,7 +76,7 @@ There is no root linter, type checker, bundler, or npm build script. A missing b
 
 Browser output directories are replaced on rebuild. Load Chromium's directory in `chrome://extensions` or `brave://extensions`; load `dist/firefox/manifest.json` through Firefox's temporary add-on workflow.
 
-The source manifest remains 1.3.2 for development. The exporter passed the focused, installed-browser and live acceptance checks recorded in [export development](export-development.md). Local builds and passing checks do not publish packages.
+The source manifest is 1.3.2, the current published baseline. The exporter passed the focused, installed-browser and live acceptance checks recorded in [export development](export-development.md). Local builds and passing checks do not publish packages.
 
 ## Release preparation in a maintainer checkout
 
