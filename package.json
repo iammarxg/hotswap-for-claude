@@ -6,6 +6,10 @@
     "check": "node tests/check-syntax.mjs",
     "benchmark": "node tests/benchmark.mjs",
     "test:installed:chrome": "node tests/installed-chrome.cjs",
-    "test:installed:firefox": "node tests/installed-firefox.mjs"
+    "test:installed:firefox": "node tests/installed-firefox.mjs",
+    "test:export": "node --test tests/export-data.test.mjs tests/export-reader.test.mjs tests/export-jobs.test.mjs",
+    "test:export:dom": "node tests/export-dom.cjs",
+    "test:export:installed": "node tests/export-installed.cjs",
+    "test:export:firefox": "node tests/export-firefox.mjs"
   }
 }

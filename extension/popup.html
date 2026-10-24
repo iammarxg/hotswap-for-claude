@@ -175,11 +175,13 @@
             <p class="hint">Downloads a full ZIP with the conversation transcript and, optionally, real attached files.</p>
             <label class="checkbox-label" for="opt-include-attachments">
               <input id="opt-include-attachments" type="checkbox" checked />
-              <span>Download &amp; save real files (.png, .py) in ZIP</span>
+              <span>Include original uploads and generated files</span>
             </label>
             <button id="export-raw-btn" class="btn btn-ghost" type="button">
               📄 Export Chat
             </button>
+            <button id="export-cancel-btn" class="btn btn-ghost hidden" type="button">Cancel export</button>
+            <button id="export-details-btn" class="btn btn-ghost hidden" type="button">Export details</button>
           </div>
 
           <!-- ── Summarize ── -->

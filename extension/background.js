@@ -1,7 +1,7 @@
 import { getGeminiApiKey, getGeminiKeyStatus, saveGeminiApiKey, clearGeminiApiKey } from "./secret-vault.js";
 import { rememberExportLocation } from "./export-location.js";
-import { exportClaudeConversationInPage } from "./export-page-script.js";
-import { SimpleZip } from "./zip-builder.js";
+import { createExportJobs } from "./export-jobs.js";
+import { summaryFileSection } from "./export-data.js";
 import { encryptBackup } from "./backup-crypto.js";
 import { createBackupRestore } from "./backup-restore.js";
 import { BACKUP_ERROR, UNSUPPORTED_VERSION_ERROR } from "./backup-schema.js";
@@ -422,6 +422,10 @@ async function fetchUsageForActiveSession() {
 // makes the request, then swaps back to whatever was live before —
 // without reloading any tab, so it's not visibly a "switch."
 async function getUsageForProfile(profileId) {
+  return exportJobs.withSession(() => getUsageForProfileUnlocked(profileId));
+}
+
+async function getUsageForProfileUnlocked(profileId) {
   const profiles = await getProfiles();
   const target = profiles[profileId];
   if (!target) throw new Error("Profile not found.");
@@ -561,10 +565,13 @@ async function syncActiveProfile() {
 // value can't bring the session back, because the token itself is dead,
 // not just missing locally. That's the #1 cause of "switching logs me out."
 async function prepareForNewAccount() {
+  await exportJobs.cancel();
   // Save whatever is currently live so it isn't lost.
   await syncActiveProfile();
-  await clearAllClaudeCookies();
-  await setActiveProfileId(null);
+  await exportJobs.withSession(async () => {
+    await clearAllClaudeCookies();
+    await setActiveProfileId(null);
+  });
 
   // Send the user to a clean login page for the new account. Navigating
   // (not just reloading) is important — a reload can hang onto the old
@@ -580,6 +587,7 @@ async function prepareForNewAccount() {
 // Switch to a given saved profile: sync out the old session, clear cookies,
 // write in the new session's cookies, then reload the active claude.ai tab.
 async function switchToProfile(profileId) {
+  await exportJobs.cancel();
   const profiles = await getProfiles();
   const target = profiles[profileId];
   if (!target) throw new Error("Profile not found.");
@@ -591,9 +599,12 @@ async function switchToProfile(profileId) {
   }
 
   await syncActiveProfile();
-  await clearAllClaudeCookies();
-  const { succeeded, failed } = await setCookies(target.cookies);
-  await setActiveProfileId(profileId);
+  const { succeeded, failed } = await exportJobs.withSession(async () => {
+    await clearAllClaudeCookies();
+    const result = await setCookies(target.cookies);
+    await setActiveProfileId(profileId);
+    return result;
+  });
 
   // Reload (or open) a claude.ai tab so the new session takes effect.
   const tabs = await chrome.tabs.query({ url: "https://claude.ai/*" });
@@ -771,6 +782,10 @@ const DEFAULT_REFRESH_INTERVAL_HOURS = 12;
 // the session tokens, re-snapshots the now-current cookies, and
 // optionally refreshes usage data while the session is live.
 async function refreshProfileSession(profileId) {
+  return exportJobs.withSession(() => refreshProfileSessionUnlocked(profileId));
+}
+
+async function refreshProfileSessionUnlocked(profileId) {
   const profiles = await getProfiles();
   const target = profiles[profileId];
   if (!target) throw new Error("Profile not found.");
@@ -1005,45 +1020,10 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// ---------- Chat export ----------
-
-const DEFAULT_EXPORT_PARENT = "HotSwap-Claude-Exports";
-
-function sanitizeFilename(s) {
-  return s
-    .replace(/[^a-z0-9\-_ ]+/gi, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .slice(0, 45) || "chat";
-}
-
-function formatExportFolderName(title, chatId) {
-  const cleanTitle = sanitizeFilename(title);
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
-  const cleanId = (chatId || "").replace(/[^a-z0-9_-]/gi, "").slice(0, 8) || "chat";
-  return `${cleanTitle}_${dateStr}_${cleanId}`;
-}
-
-// Attachment filenames come pre-sanitized from the page script (slashes,
-// colons etc. already stripped) but may keep their dot — unlike
-// sanitizeFilename() above, this one preserves it so extensions survive.
-function extensionFromUrl(url) {
-  try {
-    const path = new URL(url).pathname;
-    const match = path.match(/\.([a-z0-9]{2,5})$/i);
-    return match ? `.${match[1]}` : "";
-  } catch {
-    return "";
-  }
-}
-
-function ensureExtension(filename, url, type) {
-  if (/\.[a-z0-9]{2,5}$/i.test(filename)) return filename;
-  if (type === "text") return filename + ".txt";
-  return filename + (extensionFromUrl(url) || (type === "image" ? ".png" : ""));
-}
+// ---------- Chat exports: persistent runner, authenticated chunked page reads ----------
+const exportJobs = createExportJobs({
+  getOrgId: async () => (await getAllClaudeCookies()).find(cookie => cookie.name === "lastActiveOrg")?.value || null,
+});
 
 function waitForDownloadSettled(downloadId, timeoutMs = 15000) {
   return new Promise((resolve) => {
@@ -1074,356 +1054,8 @@ function waitForDownloadSettled(downloadId, timeoutMs = 15000) {
   });
 }
 
-async function downloadAttachmentFile(url, relativePath) {
-  try {
-    const downloadId = await chrome.downloads.download({ url, filename: relativePath, saveAs: false });
-    const result = await waitForDownloadSettled(downloadId);
-    if (!result.ok) console.warn("Attachment download interrupted", url, result.error);
-    return result.ok;
-  } catch (err) {
-    console.warn("Attachment download failed", url, err);
-    return false;
-  }
-}
-
-function buildMarkdownTranscript(data) {
-  const lines = [];
-
-  // 1. AI-Facing Context Header
-  lines.push("<!-- SYSTEM CONTEXT FOR CLAUDE:");
-  lines.push("This file contains the complete transcript of a prior Claude conversation.");
-  lines.push("Instructions:");
-  lines.push("1. Absorb all context, decisions, code, thinking processes, and attached files from this transcript.");
-  lines.push("2. Continue directly from the final turn without summarizing or re-explaining the past dialogue.");
-  lines.push("3. Respond to the user's latest query as a seamless continuation of this session.");
-  lines.push("-->");
-  lines.push("");
-
-  // 2. Human Quick Guide
-  lines.push(`# ${data.title}`);
-  lines.push("");
-  lines.push("> **To resume this conversation in another account:**");
-  lines.push("> 1. Attach this `transcript.md` (and any files from `attachments/`) to your first message.");
-  lines.push('> 2. Paste: *"Please read the attached transcript and continue our session from where it left off."*');
-  lines.push(">");
-  lines.push(`> *Exported from claude.ai on ${new Date(data.exportedAt).toLocaleString()} • Original URL: ${data.url}*`);
-  lines.push("");
-  lines.push("---");
-  lines.push("");
-
-  // 3. Message Turns with Claude Thoughts
-  for (const m of data.messages) {
-    lines.push(m.role === "user" ? "## 🧑 User" : "## 🤖 Claude");
-    lines.push("");
-
-    if (m.thought && m.thought.text) {
-      if (!m.text || !m.text.trim()) {
-        lines.push("*Note: Generation stopped before final response. Preserved thought process below:*");
-        lines.push("");
-        lines.push("<details open>");
-        lines.push(`<summary>💭 <b>Claude Thought Process</b> (${m.thought.duration || "Incomplete Turn"})</summary>`);
-        lines.push("");
-        lines.push(m.thought.text);
-        lines.push("");
-        lines.push("</details>");
-        lines.push("");
-      } else {
-        lines.push("<details>");
-        lines.push(`<summary>💭 <b>Claude Thought Process</b> (${m.thought.duration || "Internal Reasoning"})</summary>`);
-        lines.push("");
-        lines.push(m.thought.text);
-        lines.push("");
-        lines.push("</details>");
-        lines.push("");
-      }
-    }
-
-    if (m.text && m.text.trim()) {
-      lines.push(m.text.trim());
-      lines.push("");
-    }
-
-    if (m.attachments && m.attachments.length > 0) {
-      lines.push("**Attached:**");
-      for (const att of m.attachments) {
-        if (att.localPath) {
-          lines.push(`- [${att.filename}](${att.localPath})`);
-        } else if (att.url) {
-          lines.push(`- ${att.filename} — [Original Link](${att.url})`);
-        } else {
-          lines.push(`- ${att.filename} — *(Referenced in message)*`);
-        }
-      }
-      lines.push("");
-    }
-  }
-
-  return lines.join("\n");
-}
-
-async function withCapturedDownloads(work) {
-  const captured = [];
-  let allowedId = null;
-  const setAllowedId = (id) => {
-    allowedId = id;
-  };
-  const isZipBundle = (item) => {
-    if (!item) return false;
-    if (allowedId != null && (item.id === allowedId || item === allowedId)) return true;
-    const url = item.url || item.finalUrl || "";
-    const filename = item.filename || "";
-    if (filename.toLowerCase().endsWith(".zip") || filename.includes(DEFAULT_EXPORT_PARENT)) return true;
-    if (url.startsWith("data:application/zip") || url.startsWith("data:application/octet-stream")) return true;
-    return false;
-  };
-  const cancelAndErase = (id) => {
-    if (allowedId != null && id === allowedId) return;
-    try {
-      chrome.downloads.cancel(id, () => {
-        chrome.downloads.erase({ id }, () => {});
-      });
-    } catch (e) {}
-  };
-  const onCreated = (item) => {
-    if (isZipBundle(item)) return;
-    captured.push(item);
-    cancelAndErase(item.id);
-  };
-  chrome.downloads.onCreated.addListener(onCreated);
-  try {
-    const result = await work(setAllowedId);
-    return result;
-  } finally {
-    chrome.downloads.onCreated.removeListener(onCreated);
-    // Final pass cleanup of any loose individual downloads
-    for (const item of captured) {
-      if (!isZipBundle(item)) {
-        cancelAndErase(item.id);
-      }
-    }
-  }
-}
-
-function looksLikeSameFile(expectedFilename, downloadItem) {
-  const norm = (s) =>
-    (s || "")
-      .split(/[\\/]/)
-      .pop()
-      .replace(/\s?\(\d+\)(?=\.[a-z0-9]+$)/i, "")
-      .toLowerCase();
-  return norm(expectedFilename) === norm(downloadItem.filename);
-}
-
-async function resolveNativeDownload(att, capturedDownloads, usedIds, exportFolder, localName) {
-  const unclaimed = capturedDownloads.filter((item) => !usedIds.has(item.id));
-  let match = unclaimed.find((item) => looksLikeSameFile(att.filename, item));
-
-  if (!match && att.nativeDownloadTriggeredAt != null) {
-    const withStart = unclaimed
-      .filter((item) => item.startTime)
-      .map((item) => ({ item, delta: Math.abs(new Date(item.startTime).getTime() - att.nativeDownloadTriggeredAt) }))
-      .filter(({ delta }) => delta <= 10000)
-      .sort((a, b) => a.delta - b.delta);
-    if (withStart.length > 0) match = withStart[0].item;
-  }
-  if (!match) return { localPath: null, nativeDownloadPath: null };
-
-  usedIds.add(match.id);
-  const settled = await waitForDownloadSettled(match.id);
-  if (!settled.ok) return { localPath: null, nativeDownloadPath: null };
-
-  const items = await new Promise((resolve) =>
-    chrome.downloads.search({ id: match.id }, resolve)
-  );
-  const finalItem = items?.[0] || match;
-  const bestUrl = finalItem.finalUrl || finalItem.url;
-
-  if (!bestUrl || bestUrl.startsWith("blob:")) {
-    return { localPath: null, nativeDownloadPath: finalItem.filename || null };
-  }
-
-  const relativePath = `${exportFolder}/attachments/${localName}`;
-  const relocated = await downloadAttachmentFile(bestUrl, relativePath);
-  if (relocated) {
-    try {
-      await new Promise((resolve) => chrome.downloads.removeFile(match.id, resolve));
-    } catch {}
-    chrome.downloads.erase({ id: match.id }, () => {});
-    return { localPath: `attachments/${localName}`, nativeDownloadPath: null };
-  }
-
-  return { localPath: null, nativeDownloadPath: finalItem.filename || null };
-}
-
-// Scrapes the conversation DOM and saves it locally as a single ZIP bundle. Zero tokens spent.
-async function exportActiveChat(options = {}, onProgress = () => {}) {
-  const includeAttachments = options.includeAttachments !== false;
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !tab.url || !/^https:\/\/claude\.ai\/chat\//.test(tab.url)) {
-    throw new Error(
-      "Open a claude.ai conversation tab first (a URL like claude.ai/chat/...), then click Export."
-    );
-  }
-
-  return await withCapturedDownloads(async (setAllowedId) => {
-    onProgress("Scanning conversation turns & attachments…");
-
-    const result = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      world: "MAIN",
-      func: exportClaudeConversationInPage,
-      args: [{ skipDownloads: !includeAttachments, includeAttachments }],
-    });
-    const injectionResult = result?.[0]?.result;
-
-    if (!injectionResult || !injectionResult.messages || injectionResult.messages.length === 0) {
-      throw new Error(
-        "No messages found on this page. Claude's page layout may have changed since this extension was built."
-      );
-    }
-
-    const parentFolder = DEFAULT_EXPORT_PARENT;
-    const chatSubfolder = formatExportFolderName(injectionResult.title, injectionResult.chatId);
-    const zipFilename = `${parentFolder}/${chatSubfolder}.zip`;
-
-    // Assign local relative paths for all attachments if enabled
-    let attachmentIndex = 0;
-    const filenameToLocalName = new Map();
-    if (includeAttachments) {
-      for (const m of injectionResult.messages) {
-        for (const att of m.attachments || []) {
-          if (!att.url && !att.dataUrl && !att.pastedText) {
-            att.localPath = null;
-            continue;
-          }
-          const cleanName = ensureExtension(
-            att.filename,
-            att.url,
-            att.pastedText ? "text" : att.type
-          );
-          let localName = filenameToLocalName.get(cleanName);
-          if (!localName) {
-            attachmentIndex++;
-            localName = `${String(attachmentIndex).padStart(2, "0")}-${cleanName}`;
-            filenameToLocalName.set(cleanName, localName);
-          }
-          att.localName = localName;
-          att.localPath = `attachments/${localName}`;
-        }
-      }
-    } else {
-      for (const m of injectionResult.messages) {
-        for (const att of m.attachments || []) {
-          att.localPath = null;
-        }
-      }
-    }
-
-    onProgress(`Harvested ${injectionResult.messages.length} message turns. Packaging ZIP archive…`);
-
-    // Build the in-memory ZIP bundle
-    const zip = new SimpleZip();
-    const markdown = buildMarkdownTranscript(injectionResult);
-    zip.addFile("transcript.md", markdown);
-
-    // Add attachments (if enabled and deduplicated by entry path)
-    let attachmentsSaved = 0;
-    let attachmentsFailed = 0;
-
-    if (includeAttachments) {
-      const addedZipEntries = new Set();
-
-      for (const m of injectionResult.messages) {
-        for (const att of m.attachments || []) {
-          if (!att.localName) continue;
-          const entryPath = `attachments/${att.localName}`;
-          if (addedZipEntries.has(entryPath)) continue;
-          addedZipEntries.add(entryPath);
-
-          if (att.dataUrl) {
-            try {
-              const base64Index = att.dataUrl.indexOf(",");
-              if (base64Index !== -1) {
-                const base64 = att.dataUrl.slice(base64Index + 1);
-                const binaryStr = atob(base64);
-                const bytes = new Uint8Array(binaryStr.length);
-                for (let i = 0; i < binaryStr.length; i++) {
-                  bytes[i] = binaryStr.charCodeAt(i);
-                }
-                zip.addFile(entryPath, bytes);
-                attachmentsSaved++;
-              } else {
-                att.localPath = null;
-                attachmentsFailed++;
-              }
-            } catch (err) {
-              att.localPath = null;
-              attachmentsFailed++;
-            }
-          } else if (att.pastedText) {
-            try {
-              zip.addFile(entryPath, att.pastedText);
-              attachmentsSaved++;
-            } catch (err) {
-              att.localPath = null;
-              attachmentsFailed++;
-            }
-          } else if (att.url) {
-            try {
-              const res = await fetch(att.url);
-              if (res.ok) {
-                const buffer = await res.arrayBuffer();
-                zip.addFile(entryPath, buffer);
-                attachmentsSaved++;
-              } else {
-                att.localPath = null;
-                attachmentsFailed++;
-              }
-            } catch (err) {
-              att.localPath = null;
-              attachmentsFailed++;
-            }
-          }
-        }
-      }
-    }
-
-    onProgress("Saving ZIP archive…");
-
-    // Trigger one single download for the entire ZIP bundle
-    const zipDataUrl = zip.toDataUrl();
-    const downloadId = await chrome.downloads.download({
-      url: zipDataUrl,
-      filename: zipFilename,
-      saveAs: false,
-    });
-    setAllowedId(downloadId);
-
-    const settled = await waitForDownloadSettled(downloadId);
-    if (!settled.ok) {
-      throw new Error(`The export zip bundle failed to save (${settled.error}).`);
-    }
-
-    // Read the actual final filename, including custom folders and conflict renames.
-    // A browser history/storage failure must not turn an already saved export into a failure.
-    let exportLocation = null;
-    try { exportLocation = await rememberExportLocation(downloadId); } catch {}
-
-    // Cooldown window: catch and cancel any delayed async signing tasks from Claude (e.g. h(Ij))
-    await new Promise((r) => setTimeout(r, 4000));
-
-    return {
-      messageCount: injectionResult.messages.length,
-      title: injectionResult.title,
-      folder: parentFolder,
-      filename: zipFilename,
-      absolutePath: exportLocation?.path || null,
-      directory: exportLocation?.directory || null,
-      attachmentsSaved,
-      attachmentsFailed,
-    };
-  });
+async function exportActiveChat(options = {}) {
+  return exportJobs.start(options);
 }
 
 // Scrapes conversation DOM and calls Gemini API to produce an intelligent summary.
@@ -1438,26 +1070,14 @@ async function summarizeChatWithGemini(options = {}) {
     );
   }
 
-  const injectionResults = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    world: "MAIN",
-    func: exportClaudeConversationInPage,
-    args: [{ skipDownloads: true }],
-  });
-  const injectionResult = injectionResults?.[0]?.result;
-
-  if (!injectionResult || !injectionResult.messages || injectionResult.messages.length === 0) {
-    throw new Error(
-      "No messages found on this page. Claude's page layout may have changed since this extension was built."
-    );
-  }
+  const injectionResult = await exportJobs.readForSummary(tab, {includeFileContent});
 
   const apiKey = await getGeminiApiKey();
   if (!apiKey) {
     throw new Error("NO_API_KEY");
   }
 
-  // Build conversation text from DOM-extracted messages
+  // Build conversation text from the verified displayed-branch snapshot.
   const messages = injectionResult.messages || [];
   let convText = "";
   for (const m of messages) {
@@ -1470,28 +1090,7 @@ async function summarizeChatWithGemini(options = {}) {
     }
   }
 
-  // Build optional file/code content section (capped at 30,000 chars total)
-  let fileSection = "";
-  if (includeFileContent) {
-    let fileChars = 0;
-    const MAX_FILE_CHARS = 30000;
-    const fileParts = [];
-    for (const m of messages) {
-      for (const att of m.attachments || []) {
-        if (fileChars >= MAX_FILE_CHARS) break;
-        if (att.pastedText) {
-          const remaining = MAX_FILE_CHARS - fileChars;
-          const excerpt = att.pastedText.slice(0, remaining);
-          fileParts.push(`--- File: ${att.filename || "attachment"} ---\n${excerpt}`);
-          fileChars += excerpt.length;
-        }
-      }
-      if (fileChars >= MAX_FILE_CHARS) break;
-    }
-    if (fileParts.length > 0) {
-      fileSection = `\n\n--- ATTACHED FILES & CODE ---\n${fileParts.join("\n\n")}`;
-    }
-  }
+  const fileSection = includeFileContent ? summaryFileSection(injectionResult) : "";
 
   const prompt = `You are an expert AI assistant creating an executive context handoff summary of a Claude.ai conversation.
 
@@ -1603,11 +1202,16 @@ chrome.commands.onCommand.addListener(async (command) => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type?.startsWith("HOTSWAP_EXPORT_")) return false;
   (async () => {
     try {
       if (["EXPORT_BACKUP", "PREVIEW_BACKUP", "IMPORT_BACKUP", "CANCEL_BACKUP_IMPORT"].includes(message.type) &&
           (_sender.tab || _sender.id !== chrome.runtime.id || _sender.url !== chrome.runtime.getURL("popup.html"))) {
         throw new Error(BACKUP_ERROR);
+      }
+      if (["EXPORT_CHAT", "SUMMARIZE_CHAT"].includes(message.type) &&
+          (_sender.tab || _sender.id !== chrome.runtime.id || _sender.url !== chrome.runtime.getURL("popup.html"))) {
+        throw new Error("Chat tools are available only from the extension popup.");
       }
       if (["GET_GEMINI_KEY_STATUS", "SAVE_GEMINI_KEY", "CLEAR_GEMINI_KEY"].includes(message.type) &&
           (_sender.tab || _sender.id !== chrome.runtime.id)) {
@@ -1802,33 +1406,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true; // keep the message channel open for the async response
 });
 
-// Long-lived port connection for streaming chat exports without MV3 timeout
-chrome.runtime.onConnect.addListener((port) => {
-  if (port.name === "export-chat") {
-    port.onMessage.addListener(async (msg) => {
-      if (msg?.type === "PING") {
-        try {
-          port.postMessage({ type: "PONG" });
-        } catch (e) {}
-        return;
-      }
-      if (msg?.type === "START_EXPORT") {
-        try {
-          const info = await exportActiveChat(msg.options || {}, (text) => {
-            try {
-              port.postMessage({ type: "PROGRESS", text });
-            } catch (e) {}
-          });
-          port.postMessage({ type: "DONE", info });
-        } catch (err) {
-          try {
-            port.postMessage({ type: "ERROR", error: err.message || String(err) });
-          } catch (e) {}
-        }
-      }
-    });
-  }
-});
+// Long-lived port connection is owned by export-jobs.js.
 
 // Resume legacy-key migration automatically whenever the worker starts.
 getGeminiKeyStatus().catch(() => console.warn("Secure API key storage needs attention in Settings."));

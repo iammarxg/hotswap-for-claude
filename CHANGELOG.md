@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.3.2] - 2026-10-24
+
+### Changed
+- Rebuilt chat exports for Claude's redesigned UI, including complete long conversations and the branch currently displayed.
+- Export tasks continue after the popup closes, with progress, cancellation and a detailed report. Missing content or files are saved in a clearly marked `_INCOMPLETE` ZIP.
+
+### Fixed
+- Removed document-start download suppression and browser-wide export download cancellation so ordinary manual downloads retain native behavior.
+- Recover original uploads and generated files, including HTML, JavaScript, CSS, Markdown, PDF, PowerPoint, images, ZIP, XPI, batch and shell scripts.
+- Preserve repeated messages, code whitespace, tables and distinct files sharing a name. Retry interrupted file reads and reserve ZIP space for the transcript and failure report when files exceed capacity.
+- Coordinate account/session refreshes with running exports to keep reads bound to the source account.
+
+After updating, reload existing Claude tabs to remove the old page's download hooks.
+
+---
+
 ## [v1.3.1] - 2026-10-15
 
 ### Changed

@@ -3,6 +3,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import struct
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,5 +38,26 @@ assert (ROOT / 'store-assets' / f'v{version}' / 'chrome' / default.name).read_by
 for name in ['CHANGELOG.md', 'RELEASE_NOTES.md']:
     assert (ROOT / 'dist' / name).is_file()
 assert f'## [v{version}]' in (ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
+changelog = (ROOT / 'CHANGELOG.md').read_bytes()
+match = re.search(r'##\s*\[v?' + re.escape(version) + r'\][^\n]*\n(.*?)(?=\n##\s*\[|\Z)', (ROOT / 'CHANGELOG.md').read_text(encoding='utf-8'), re.DOTALL)
+notes = match.group(1).strip() + '\n'
+assert (ROOT / 'dist/CHANGELOG.md').read_bytes() == changelog, 'Stale release changelog'
+assert (ROOT / 'dist/RELEASE_NOTES.md').read_text(encoding='utf-8') == notes, 'Stale release notes'
+for browser in ('chrome', 'firefox'):
+    folder = ROOT / 'store-assets' / f'v{version}' / browser
+    assert (folder / 'RELEASE_NOTES.md').read_text(encoding='utf-8') == notes
+    assert (folder / 'CHANGELOG.md').read_bytes() == changelog
+    assert '4 characters' not in (folder / 'listing-description.txt').read_text(encoding='utf-8'), 'Obsolete backup password policy in store copy'
+    shots = sorted(folder.glob('screenshot_*_1280x800.png')) if browser == 'chrome' else [folder / item['file'] for item in json.loads((folder / 'image-validation.json').read_text())['images']]
+    assert len(shots) == 5, 'Missing store screenshots'
+    for shot in shots:
+        data = shot.read_bytes()
+        assert data[:8] == b'\x89PNG\r\n\x1a\n'
+        assert struct.unpack('>II', data[16:24]) == ((1280, 800) if browser == 'chrome' else (2400, 1800))
+    with zipfile.ZipFile(folder / f'hotswap-{browser}-upload-kit.zip') as kit:
+        assert kit.testzip() is None
+        assert kit.read('RELEASE_NOTES.md').decode('utf-8').replace('\r\n', '\n') == notes
+        assert kit.read(f'hotswap-for-claude-{browser}-v{version}.zip') == (ROOT / 'dist' / f'hotswap-for-claude-{browser}-v{version}.zip').read_bytes()
+print('PASS release notes, changelogs, store copy, five screenshots per browser and both upload kits')
 (ROOT / 'docs/security/release-package-results.json').write_text(json.dumps({'version': version, 'ok': True, 'packages': records}, indent=2) + '\n', encoding='utf-8')
 print(f'PASS v{version}: all three release ZIPs, changelog and release notes ready')

@@ -39,6 +39,10 @@ Default shortcuts: **Alt + Shift + → / ←** to cycle, and **Alt + Shift + 1**
 
 ![Chat export controls and the contents of an exported ZIP](assets/screenshot_tools.png)
 
+Version 1.3.2 supports Claude's redesigned UI. It exports the displayed branch, original files, and an `export-report.json` alongside the Markdown transcript. An `_INCOMPLETE` filename and warning identify content or files that could not be recovered. The export task continues after the popup closes; its details tab provides progress and cancellation. Live Brave acceptance verified a 2,000-line conversation and 43 files. See [development status](docs/export-development.md) for validation evidence.
+
+After updating an older build, reload your open Claude tabs to remove the previous page's download hooks.
+
 ### Themes and encrypted backups
 
 ![Three themes and the password-protected backup flow](assets/screenshot_settings.png)
@@ -65,6 +69,10 @@ It creates browser-specific ZIPs and unpacked folders in `dist/`.
 - **Firefox:** open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and select `dist/firefox/manifest.json`.
 
 Ready-made packages and their changelog are available on the [GitHub Releases page](https://github.com/iammarxg/hotswap-for-claude/releases/latest).
+
+## Contributing
+
+Start with [CLAUDE.md](CLAUDE.md) for shared contributor and agent guidance, then [the development guide](docs/development.md) for architecture, focused checks, browser-test prerequisites, and packaging caveats.
 
 ## Help and license
 

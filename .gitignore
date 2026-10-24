@@ -13,6 +13,8 @@ Desktop.ini
 
 # Node / Dependencies (if ever added)
 node_modules/
+__pycache__/
+*.py[cod]
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

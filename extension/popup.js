@@ -938,68 +938,58 @@ async function copyToClipboard(text, buttonEl, successText = "✓ Copied!") {
   }
 }
 
+let exportPort = null;
+let exportRunnerTabId = null;
+const exportCancelBtn = document.getElementById("export-cancel-btn");
+const exportDetailsBtn = document.getElementById("export-details-btn");
+function setExportRunning(running) {
+  if (exportRawBtn) exportRawBtn.disabled = running;
+  exportCancelBtn?.classList.toggle("hidden", !running);
+  exportDetailsBtn?.classList.toggle("hidden", !exportRunnerTabId);
+}
+function connectExportPort() {
+  if (exportPort) return exportPort;
+  const port = chrome.runtime.connect({name:"export-chat"});
+  exportPort = port;
+  const timer = setInterval(() => { try { port.postMessage({type:"PING"}); } catch { clearInterval(timer); } }, 10000);
+  port.onMessage.addListener(async message => {
+    if (message.type === "PROGRESS") {
+      exportRunnerTabId = message.runnerTabId || exportRunnerTabId;
+      setExportRunning(true);
+      showStatus(message.text || "Exporting conversation…");
+    } else if (message.type === "DONE") {
+      const info = message.info || {};
+      exportRunnerTabId = info.runnerTabId || exportRunnerTabId;
+      setExportRunning(false);
+      const description = `${info.messageCount} turns, ${info.attachmentsSaved || 0} files saved${info.attachmentsFailed ? `, ${info.attachmentsFailed} files failed` : ""}`;
+      showStatus(info.incomplete
+        ? `Incomplete export saved (${description}). Read export-report.json for missing content or files.`
+        : `Export saved (${description})${info.absolutePath ? `: ${info.absolutePath}` : "."}`, info.incomplete ? "error" : "success");
+      await loadExportLocation();
+    } else if (["ERROR", "CANCELLED"].includes(message.type)) {
+      setExportRunning(false);
+      showStatus(message.error || "Export cancelled.", message.type === "ERROR" ? "error" : "");
+    } else if (message.type === "IDLE") setExportRunning(false);
+  });
+  port.onDisconnect.addListener(() => {
+    clearInterval(timer);
+    if (exportPort === port) exportPort = null;
+    // The runner owns the export; reconnecting does not start another job.
+    setExportRunning(false);
+  });
+  port.postMessage({type:"STATUS"});
+  return port;
+}
 async function handleExportRaw() {
   if (!exportRawBtn || exportRawBtn.disabled) return;
-  exportRawBtn.disabled = true;
-  const includeAttachments = optIncludeAttachments ? optIncludeAttachments.checked : true;
-  showStatus(
-    includeAttachments
-      ? "Starting backup (transcript & attachments)…"
-      : "Exporting conversation transcript…"
-  );
-  const options = {
-    includeAttachments,
-  };
-
-  try {
-    const port = chrome.runtime.connect({ name: "export-chat" });
-    const pingTimer = setInterval(() => {
-      try {
-        port.postMessage({ type: "PING" });
-      } catch (e) {
-        clearInterval(pingTimer);
-      }
-    }, 4000);
-
-    port.postMessage({ type: "START_EXPORT", options });
-
-    port.onMessage.addListener(async (msg) => {
-      if (msg.type === "PROGRESS") {
-        showStatus(msg.text || "Exporting conversation…");
-      } else if (msg.type === "DONE") {
-        clearInterval(pingTimer);
-        exportRawBtn.disabled = false;
-        const res = msg.info || {};
-        const attachmentNote =
-          includeAttachments && (res.attachmentsSaved || res.attachmentsFailed)
-            ? ` (${res.attachmentsSaved} file(s) saved${res.attachmentsFailed ? `, ${res.attachmentsFailed} failed` : ""})`
-            : "";
-        showStatus(
-          `Exported "${res.title}" (${res.messageCount} turns) — ${res.absolutePath ? `saved to ${res.absolutePath}` : "saved successfully; full path unavailable"}.${attachmentNote}`,
-          "success"
-        );
-        await loadExportLocation();
-        try { port.disconnect(); } catch (e) {}
-      } else if (msg.type === "ERROR") {
-        clearInterval(pingTimer);
-        exportRawBtn.disabled = false;
-        showStatus(msg.error || "Could not export this chat.", "error");
-        try { port.disconnect(); } catch (e) {}
-      }
-    });
-
-    port.onDisconnect.addListener(() => {
-      clearInterval(pingTimer);
-      exportRawBtn.disabled = false;
-      if (chrome.runtime.lastError) {
-        showStatus(chrome.runtime.lastError.message, "error");
-      }
-    });
-  } catch (err) {
-    exportRawBtn.disabled = false;
-    showStatus(err.message || String(err), "error");
-  }
+  setExportRunning(true);
+  showStatus("Starting conversation export…");
+  try { connectExportPort().postMessage({type:"START_EXPORT",options:{includeAttachments:optIncludeAttachments?.checked !== false}}); }
+  catch { setExportRunning(false); showStatus("Could not connect to the export task.","error"); }
 }
+exportCancelBtn?.addEventListener("click", () => connectExportPort().postMessage({type:"CANCEL"}));
+exportDetailsBtn?.addEventListener("click", () => { if (exportRunnerTabId) chrome.tabs.update(exportRunnerTabId,{active:true}).catch(() => showStatus("The export details tab was closed.","error")); });
+connectExportPort();
 
 async function handleSummarize() {
   if (!summarizeBtn || summarizeBtn.disabled) return;
@@ -1011,7 +1001,7 @@ async function handleSummarize() {
   const options = {
     includeFileContent: optIncludeSummaryContent ? optIncludeSummaryContent.checked : true,
   };
-  const res = await sendMessage({ type: "SUMMARIZE_CHAT", options });
+  const res = await sendMessage({ type: "SUMMARIZE_CHAT", options }, 30 * 60 * 1000);
 
   if (!res?.ok) {
     summarizeBtn.disabled = false;

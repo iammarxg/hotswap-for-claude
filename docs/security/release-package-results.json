@@ -1,20 +1,20 @@
 {
-  "version": "1.3.1",
+  "version": "1.3.2",
   "ok": true,
   "packages": [
     {
       "browser": "chrome",
-      "package": "hotswap-for-claude-chrome-v1.3.1.zip",
-      "bytes": 91407,
-      "sha256": "5467ab3aae755711623e013d5425564a47fe62e9a623d0fc78a4dc9220db137f",
-      "packagedFiles": 19
+      "package": "hotswap-for-claude-chrome-v1.3.2.zip",
+      "bytes": 96667,
+      "sha256": "6b0b36137151075d61abaec893db606e9b5406316b11e60a46bc75bd41727836",
+      "packagedFiles": 26
     },
     {
       "browser": "firefox",
-      "package": "hotswap-for-claude-firefox-v1.3.1.zip",
-      "bytes": 91498,
-      "sha256": "4e9e7d7a17f06bebf2bb65b8fa16d13657860bbb108354b020b4f1a8986aded7",
-      "packagedFiles": 19
+      "package": "hotswap-for-claude-firefox-v1.3.2.zip",
+      "bytes": 96758,
+      "sha256": "a7d00e0b8ed1d8d078f9d89f71f1f15aac34e1de462d71676bfff10dd3852fe4",
+      "packagedFiles": 26
     }
   ]
 }

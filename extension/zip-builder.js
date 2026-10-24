@@ -37,9 +37,14 @@ function dosDateTime(date = new Date()) {
 }
 
 export class SimpleZip {
-  constructor() {
+  constructor({reservedEntries = 0, reservedBytes = 0} = {}) {
+    if (!Number.isSafeInteger(reservedEntries) || reservedEntries < 0 || reservedEntries > 65535 || !Number.isSafeInteger(reservedBytes) || reservedBytes < 0 || reservedBytes > 0xffffffff) throw new Error('Invalid ZIP reservation');
     this.files = [];
+    this.reservedEntries = reservedEntries;
+    this.reservedBytes = reservedBytes;
   }
+
+  releaseReservedSpace() { this.reservedEntries = 0; this.reservedBytes = 0; }
 
   // Add a file: data can be Uint8Array, string (UTF-8), or ArrayBuffer
   addFile(path, data) {
@@ -55,6 +60,7 @@ export class SimpleZip {
       bytes = new Uint8Array(0);
     }
 
+    this.validateEntry(cleanPath, bytes.length);
     this.files.push({
       path: cleanPath,
       bytes,
@@ -63,8 +69,28 @@ export class SimpleZip {
     });
   }
 
-  // Generates the final ZIP binary as a Uint8Array
-  build() {
+  validateEntry(path, size) {
+    if (!path || path.split('/').some(part => !part || part === '.' || part === '..') || /[\x00-\x1f]/.test(path)) throw new Error('Invalid ZIP path');
+    if (!Number.isSafeInteger(size) || size < 0 || new TextEncoder().encode(path).length > 65535 || size > 0xffffffff || this.files.length + this.reservedEntries >= 65535) throw new Error('Classic ZIP capacity exceeded');
+    if (this.files.some(file => file.path === path)) throw new Error('Duplicate ZIP path');
+    const total = this.files.reduce((sum,file)=>sum+file.size+76+new TextEncoder().encode(file.path).length*2,22);
+    if (total+size+76+new TextEncoder().encode(path).length*2+this.reservedBytes>0xffffffff) throw new Error('Classic ZIP capacity exceeded');
+  }
+
+  async addBlob(path, blob) {
+    this.validateEntry(path, blob.size);
+    let crc = 0xffffffff;
+    const reader = blob.stream().getReader();
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      for (const byte of value) crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ byte) & 0xff];
+    }
+    this.files.push({path, blob, crc:(crc ^ 0xffffffff) >>> 0, size:blob.size});
+  }
+
+  // Header buffers and existing file Blobs remain separate; no archive-sized copy.
+  parts() {
     const encoder = new TextEncoder();
     const { dosTime, dosDate } = dosDateTime();
     const localHeaders = [];
@@ -77,7 +103,8 @@ export class SimpleZip {
       const dataLen = file.size;
 
       // --- Local File Header (30 bytes + nameLen + dataLen) ---
-      const localHdr = new Uint8Array(30 + nameLen + dataLen);
+      if (offset + 30 + nameLen + dataLen > 0xffffffff) throw new Error('Classic ZIP capacity exceeded');
+      const localHdr = new Uint8Array(30 + nameLen);
       const localView = new DataView(localHdr.buffer);
 
       localView.setUint32(0, 0x04034b50, true); // Local header signature
@@ -93,9 +120,7 @@ export class SimpleZip {
       localView.setUint16(28, 0, true);         // Extra field length
 
       localHdr.set(nameBytes, 30);
-      localHdr.set(file.bytes, 30 + nameLen);
-
-      localHeaders.push(localHdr);
+      localHeaders.push(localHdr, file.blob || file.bytes);
 
       // --- Central Directory Header (46 bytes + nameLen) ---
       const cdHdr = new Uint8Array(46 + nameLen);
@@ -122,7 +147,7 @@ export class SimpleZip {
       cdHdr.set(nameBytes, 46);
       centralEntries.push(cdHdr);
 
-      offset += localHdr.length;
+      offset += localHdr.length + dataLen;
     }
 
     const cdOffset = offset;
@@ -144,21 +169,25 @@ export class SimpleZip {
     eocdView.setUint32(16, cdOffset, true);  // Offset of central dir
     eocdView.setUint16(20, 0, true);         // Comment length
 
-    // Assemble all chunks into single Uint8Array
     const totalSize = offset + cdSize + 22;
+    if (totalSize > 0xffffffff) throw new Error('Classic ZIP capacity exceeded');
+    return {chunks:[...localHeaders, ...centralEntries, eocd], totalSize};
+  }
+
+  toBlob() {
+    return new Blob(this.parts().chunks, {type:'application/zip'});
+  }
+
+  // Compatibility for callers with byte-array entries, including existing tests.
+  build() {
+    const {chunks, totalSize} = this.parts();
     const result = new Uint8Array(totalSize);
     let cur = 0;
-
-    for (const lh of localHeaders) {
-      result.set(lh, cur);
-      cur += lh.length;
+    for (const chunk of chunks) {
+      if (chunk instanceof Blob) throw new Error('Use toBlob for Blob ZIP entries');
+      result.set(chunk, cur);
+      cur += chunk.length;
     }
-    for (const cd of centralEntries) {
-      result.set(cd, cur);
-      cur += cd.length;
-    }
-    result.set(eocd, cur);
-
     return result;
   }
 

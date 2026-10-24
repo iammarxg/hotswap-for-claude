@@ -1,5 +1,5 @@
 {
-  "browser": "153.0.8010.12",
+  "browser": "156.0.8078.48",
   "context": "installed production MV3 extension, actual toolbar popup/runtime/storage/downloads",
   "checks": [
     "invalid export clears both password fields",

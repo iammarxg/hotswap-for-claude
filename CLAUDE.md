@@ -1,115 +1,42 @@
-# HotSwap for Claude - Claude Code Instructions
+# HotSwap for Claude: contributor and agent guide
 
-## Project Overview
-HotSwap for Claude is a privacy-first Manifest V3 browser extension that enables seamless management of multiple Claude.ai accounts within a single browser profile. It solves the friction of managing multiple Claude.ai accounts by providing instant hot-swapping without logging out, real-time usage monitoring, session keep-alive, and AI-powered conversation summarization.
+HotSwap is a Manifest V3 browser extension for Claude account switching, usage monitoring, chat exports, optional Gemini summaries, and encrypted account backups. The runtime uses native browser APIs and ES modules without a bundler or third-party runtime dependencies.
 
-## Key Features
-- **Instant Hot-Swapping**: Switch between saved Claude accounts without logging out using cookie snapshotting
-- **Usage Monitoring**: Real-time 5-hour session and 7-day weekly limit tracking for all account types (Free, Pro, Max, Team)
-- **Session Keep-Alive**: Background refreshes to prevent cookie expiration via sequential profile exercising
-- **Unified Theme Engine**: Three curated palettes (Midnight, Claude Light, Claude Dark) with zero-flash bootstrap
-- **Gemini AI Summarizer**: Context handoff summaries using gemini-3.5-flash-lite copied to clipboard
-- **Lossless Chat Exporter**: ZIP archives with full conversation transcript, thoughts, and attachments
-- **Encrypted Account Backups**: `backup-crypto.js` encrypts new JSON exports with AES-256-GCM and PBKDF2-SHA-256; restore accepts encrypted files and legacy plaintext backups. Backup passwords remain transient. See `src/BACKUPS.md` when changing the format or backup flows.
-- **Privacy-First**: Saved sessions and settings use browser-local storage with zero telemetry; optional Gemini summaries send selected conversation content directly to Google. Account backup exports are encrypted locally.
-- **Account Pinning**: Pin-to-top ordering for frequently used accounts.
-- **Desktop Reset Notifications** *(v1.2.0)*: `chrome.notifications` OS alert when exhausted account's session quota resets
-- **Deterministic Quota Cooldown Reset** *(v1.2.1)*: Instant 0% normalization and live UI ticker eliminating hanging "resets soon"
-- **First-Account Onboarding** *(v1.2.2)*: Guided first-save flow for the current Claude login or a clean Claude sign-in
+## Start here
 
-## Current Version: `v1.3.0`
+1. Inspect `git status --short` and preserve existing work. Check `package.json` for available checks and `extension/manifest.json` for the packaged version and permissions.
+2. Edit `extension/` for runtime changes. The ignored `src/` tree is an older private implementation that intentionally differs; copying it over `extension/` would lose newer backup and export work.
+3. Read [docs/development.md](docs/development.md) for architecture, focused validation, packaging, and release caveats. For backup changes, also read [the format specification](docs/security/backup-format.md) and [threat model](docs/security/threat-model.md).
+4. Run checks appropriate to the change and report which passed, failed, or could not run. Keep documentation aligned with changed behavior; documentation-only edits do not require a release version bump.
 
-## Technical Architecture
-The extension operates across 4 execution realms with strict security boundaries:
+## Current development state
 
-1. **Page Context (claude.ai)**:
-   - `blob-capture-init.js` (MAIN world): Intercepts fetch, SSE streams, HTTP 429 errors, ObjectURLs
-   - `sse-bridge-content.js` (ISOLATED world): Has chrome.runtime access, listens to window.postMessage
+Reviewed against this checkout on 2026-10-24:
 
-2. **Background Service Worker** (`background.js`):
-   - Orchestrates cookies (chrome.cookies), storage (chrome.storage.local), alarms, network requests
-   - Manages SSE usage cache, cookie snapshots, usage endpoint queries, session keep-alive
-   - Provides persistent port connection with 4s PING/PONG heartbeats to prevent MV3 worker timeouts during exports
-   - Filters and cleans stray native browser downloads via `withCapturedDownloads`
+- The source manifest is **1.3.2**, a validated release candidate for Claude's redesigned chat and file-viewer UI. Packages and store kits are prepared locally; publication requires its own authorization.
+- The exporter uses authenticated conversation/file reads, an extension-owned runner, and acknowledged chunks. Focused Node, DOM fallback, installed Brave/Firefox exports and backup smoke checks pass. Live reader checks recovered all nine supplied branches/files. Personal Brave acceptance also passed: the actual exported ZIP preserved 12 turns, 2,000 numbered lines and 43 files with matching hashes; a native individual download completed. See the export notes for evidence.
+- For export changes, read [the export development notes](docs/export-development.md), which own the observed Claude routes, completeness rules, and current validation status. Preserve existing local changes rather than restoring the reverted beta wholesale.
+- Fleet summary and account color tags were removed in 1.3.0; pinning, themes, per-account usage, notifications, and onboarding remain.
 
-3. **Extension Popup** (`popup.js`/`popup.css`):
-   - Renders responsive UI, monitors quota resets, triggers exports and profile swaps
-   - Handles account management, settings, tools, and keyboard shortcuts
-   - Streams real-time progress updates during export via long-lived runtime port
+## Invariants
 
-4. **Injected Export Script** (`export-page-script.js`):
-   - Traverses virtualized chat DOM, captures messages, extracts attachments
-   - Auto-expands Claude thought processes, handles artifact downloads
-   - Intercepts `URL.createObjectURL` to capture raw `Blob` objects directly in memory with 100% pixel fidelity
-   - Hooks `Node.prototype.appendChild` across `window` and child `iframe.contentWindow` realms to suppress native browser "Save As" prompts and package files directly into the ZIP
+- Account switching clears/restores local cookies. Never invoke Claude's server logout endpoint: it revokes saved sessions.
+- MAIN-world scripts have no extension runtime access. Keep injected functions self-contained and use the ISOLATED bridge for page usage events. Treat page-originated data as untrusted.
+- Claude SSE windows use `5h` and `7d`; normalize seconds to milliseconds before comparing reset times. Preserve free-plan fallback and elapsed-reset normalization.
+- Build popup UI with safe DOM APIs (`textContent`, `createElement`, `replaceChildren`); avoid `innerHTML` assignments and inline executable scripts.
+- New backups use format v2. Preserve exact v1 password/AAD semantics, legacy plaintext reads, popup-only backup commands, validated preview, and one-use confirmation before the single profile write. The format specification owns algorithm parameters and limits.
+- Gemini keys stay in the background-only encrypted IndexedDB vault. Return configured status to the popup; keep keys, cookies, backup passwords, and raw credential-bearing errors out of logs and fixtures.
+- Optional summaries send selected conversation content directly to Google. Account backups, chat ZIPs, and Gemini summaries have different privacy boundaries; chat ZIPs are unencrypted.
+- Leave native download behavior intact. Export files through authenticated reads, bind privileged operations to the registered runner/source tab, and report incomplete scans or files explicitly. The document-start script observes usage only.
 
-## Development & Build Instructions
-- Source files: `src/` directory (private development source)
-- Public extension files: `extension/` directory (clean public mirror)
-- Build command: `python package.py` (creates distributable ZIPs in `dist/`)
-- Store assets command: `python scripts/package.py` (populates `store-assets/v{version}/` with archives, icons, and screenshots)
-- **Store-assets release invariant**: Every version bump or release must refresh `store-assets/v{version}/`. Run the store-assets packager after updating the manifest, then verify the folder contains the three versioned ZIPs plus the current icons, promo images, and screenshots. Never leave store assets pointing at an older version.
-- Load unpacked: Select `dist/chrome` or `extension/` folder in chrome://extensions
-- Local release preparation: `python scripts/publish_release.py --prepare` (audits public files and builds packages/notes; never pushes). Preserve intentional `extension/` vs `src/` differences.
-- Current user instruction: wait for user testing and an explicit “push” before pushing commits/tags, triggering Actions or publishing.
+## Repository and publication boundaries
 
-## Release Guidelines
-- **Changelog Attachment**: Every public GitHub release **must** include the CHANGELOG.md file
-- **Feature/Bug Changes**: Document all changes in CHANGELOG.md using maximum 1-3 sentences per item (concise, actionable descriptions)
-- **Changelog Format**: Follow Keep a Changelog format with clear version headers and categorized sections (Added, Changed, Fixed, etc.)
+Tracked contributor material includes `extension/`, `tests/`, `docs/`, root package files, `CLAUDE.md`, public assets, and the release workflow. Inspect the Git index rather than assuming every local file is public.
 
-## Versioning Strategy (Semantic Versioning: x.y.z)
-HotSwap for Claude strictly follows [Semantic Versioning 2.0.0](https://semver.org/) (`MAJOR.MINOR.PATCH`):
-- **`x` = MAJOR (Breaking Changes & Generational Milestones)**: Storage schema migrations requiring incompatible data format changes, ground-up architectural rewrites (e.g. MV3 to MV4), or major scope expansions (e.g. multi-provider support across Claude, ChatGPT, and Gemini).
-  *Examples*: `v1.0.0` (Initial launch), `v2.0.0` (Future multi-model expansion).
-- **`y` = MINOR (New Features & Substantial Additions)**: Adding brand-new user-facing features, tools, tabs, or substantial enhancements in a backwards-compatible manner where existing user settings and sessions remain intact.
-  *Examples*: `v1.1.0` (Unified Theme Engine, Universal Gemini AI Summarizer, Lossless ZIP Bundler).
-- **`z` = PATCH (Bug Fixes & Maintenance Polish)**: Backwards-compatible bug fixes, UI/CSS alignment corrections, DOM/API adaptations to Claude.ai layout changes, timeout hardening, and performance improvements.
-  *Examples*: `v1.0.1` (Free-plan usage stream parser fix), `v1.1.1` (Accounts tab progress bar layout fix), `v1.1.2` (Export chat attachment packaging & stray download suppression).
+`src/`, `scripts/`, `website/`, `store-assets/`, `dist/`, `temp/`, `MEMORY.md`, `ROADMAP.md`, and deployment helpers are private or generated local material. Public clones may lack them. Use synthetic account data and conversations for committed fixtures and evidence.
 
-## Local vs Public Git
-This repository maintains a private monorepo with a clean public mirror for open-source distribution:
-- **Local/Private**: All files including `src/`, `scripts/`, `website/`, `store-assets/`, `MEMORY.md`, `ROADMAP.md` are kept in the private repository
-- **Public Mirror**: Only the extension source (`extension/`), assets, `package.py`, `README.md`, `CHANGELOG.md`, and `.github/workflows/` are published to GitHub
-- Files **NOT** to push to public git: `src/`, `scripts/`, `website/`, `store-assets/`, `MEMORY.md`, `ROADMAP.md`, internal development branches
-- The `scripts/publish_release.py` script audits the public file allowlist and prepares packages without changing Git history or copying private source over the public runtime.
+Build and test locally within the task's scope. Pushing commits/tags, triggering release Actions, deploying the website, and store submissions require explicit user authorization for that action. Prior release authorization does not authorize a future release. Published tags/releases remain immutable; use forward-only, non-force publication.
 
-## Git Workflow Requirements
-- **Private Git**: Frequent commits and pushes to the private repository are **strongly encouraged** to track changes, enable easy rollback of breaking changes, and maintain proper version history
-- **Public GitHub**: All commits and pushes to the public GitHub repository **require manual approval** and must go through the official release process using `scripts/publish_release.py`
-- Never push private/internal files (`src/`, `scripts/`, etc.) to public GitHub - the publish script handles creating the clean public mirror
+For a release, use semantic versioning and concise entries in `CHANGELOG.md`. Attach the full changelog alongside version-specific notes and browser packages. Refresh corresponding local store kits when private tooling/assets are available. See the release caveats in [docs/development.md](docs/development.md) before invoking the preparation helper.
 
-## Important Files
-- `manifest.json`: Extension configuration, permissions, content scripts, background worker
-- `background.js`: Core logic for cookie management, usage tracking, session refresh
-- `export-page-script.js`: Conversation DOM scraping and attachment handling
-- `popup.js`: UI logic and communication with background worker
-- `zip-builder.js`: Lossless ZIP bundler for chat exports
-- `ARCHITECTURE.md`: Detailed technical overview (internal)
-- `ROADMAP.md`: Feature backlog and architectural principles (internal, gitignored)
-- `MEMORY.md`: Project brain and operations manual (internal, gitignored)
-- `CHANGELOG.md`: Release notes - **always attached to public GitHub releases**
-
-## Security & Privacy Guarantees
-- Zero analytics or tracking telemetry; saved sessions/settings use chrome.storage.local; Gemini keys use the background-only encrypted IndexedDB vault (`secret-vault.js`).
-- The vault atomically stores AES-256-GCM ciphertext with a non-exportable browser key, serializes mutations, and migrates legacy plaintext keys after verifying the committed record. Popup responses contain configured status only.
-- Local backup encryption; passwords are transient, and session requests go directly to Claude
-- No credential logging - direct browser-to-claude.ai exchanges only
-- CSP-compliant popup (no inline scripts)
-- Minimal required permissions: cookies, storage, tabs, scripting, downloads, alarms
-- Host permissions limited to claude.ai and generativelanguage.googleapis.com domains
-
-## Current Version
-v1.3.0
-
-## Support
-- Website: https://hotswap.jeddah.dev
-- Support: support@jeddah.dev
-- GitHub: https://github.com/iammarxg/hotswap-for-claude
-- Chrome Web Store: nnpnmjhealgmnbinplmccegkecabcpdk
-- Firefox Add-ons: hotswap-for-claude@extension
-
-## License
-Internal source: Private (not for redistribution)
-Public mirror: GNU Affero General Public License v3.0 (AGPL-3.0-only)
-See LICENSE file for details.
+For website work in a maintainer checkout, start with `website/README.md`; deployment instructions live in `website/DEPLOY-UI.md` (dashboard) and `website/DEPLOY.md` (CLI). Private `MEMORY.md` and `ROADMAP.md` track maintainer handoffs and backlog rather than overriding the checked-in runtime guide.

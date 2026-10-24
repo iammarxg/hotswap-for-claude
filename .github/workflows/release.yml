@@ -32,7 +32,10 @@ jobs:
           python-version: "3.11"
 
       - name: Run Production Packager
-        run: python package.py
+        run: |
+          python tests/release_policy.py
+          python tests/release_policy.py --audit
+          python package.py
 
       - name: Read Extension Version
         id: get_version
